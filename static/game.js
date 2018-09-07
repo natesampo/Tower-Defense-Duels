@@ -29,10 +29,13 @@ class Tower {
       }
 
       if (time - this.lastAttackTime > this.attackTime) {
-        if (player.enemies.length > 0) {
-          socket.emit('attack', 0, this.damage);
+        for (var i in player.enemies) {
+          var enemy = player.enemies[i];
 
-          this.lastAttackTime += this.attackTime;
+          if (this.range >= Math.sqrt((enemy.x - this.x)*(enemy.x - this.x) + (enemy.y - this.y)*(enemy.y - this.y))) {
+            socket.emit('attack', enemy, this.damage);
+            this.lastAttackTime += this.attackTime;
+          }
         }
       }
     }

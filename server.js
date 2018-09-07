@@ -106,13 +106,17 @@ class Enemy {
 		}
 	}
 
-	checkDeath() {
+	updateHealth() {
 		if (this.hp < 0) {
 			for (var i=0; i<games[this.gameID].players[this.owner].enemies.length; i++) {
 				if (games[this.gameID].players[this.owner].enemies[i] == this) {
 					games[this.gameID].players[this.owner].enemies.splice(i, 1);
 					break;
 				}
+			}
+		} else {
+			if (this.hp == 1) {
+				this.color = 'red';
 			}
 		}
 	}
@@ -139,21 +143,20 @@ class Wave {
 	}
 }
 
-
 var waves = [
 	[
 	new Wave(enemy='Grunt', quantity=10, timeBetween=500, timeAfter=20000)
 	],
 	[
 	new Wave(enemy='Grunt', quantity=10, timeBetween=250, timeAfter=500),
-	new Wave(enemy='Raider', quantity=10, timeBetween=400, timeAfter=20000)
+	new Wave(enemy='Raider', quantity=10, timeBetween=400, timeAfter=15000)
 	],
 	[
 	new Wave(enemy='Grunt', quantity=10, timeBetween=500, timeAfter=1000),
-	new Wave(enemy='Raider', quantity=20, timeBetween=400, timeAfter=20000)
+	new Wave(enemy='Raider', quantity=20, timeBetween=400, timeAfter=15000)
 	],
 	[
-	new Wave(enemy='Raider', quantity=30, timeBetween=300, timeAfter=20000)
+	new Wave(enemy='Raider', quantity=30, timeBetween=300, timeAfter=15000)
 	]
 ];
 
@@ -182,7 +185,7 @@ io.on('connection', function(socket) {
     	var player = games[users[socket.id].inGame].players[socket.id];
     	if (player.enemies[enemy]) {
 	    	player.enemies[enemy].hp -= damage;
-	    	player.enemies[enemy].checkDeath();
+	    	player.enemies[enemy].updateHealth();
 	    }
 	});
 	socket.on('disconnect', function() {
@@ -198,7 +201,7 @@ io.on('connection', function(socket) {
 				users[game.players[socket.id].opponent].inGame = null;
 				findMatch(users[game.players[socket.id].opponent]);
 
-				delete games[users[socket.id].inGame]
+				delete games[users[socket.id].inGame];
 			}
 
 			delete users[socket.id];
