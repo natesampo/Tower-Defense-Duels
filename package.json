@@ -1,0 +1,10 @@
+{
+    "name": "TW",
+    "version": "0.0.1",
+    "description": "App",
+    "dependencies": {
+        "express": "^4.16.3",
+        "socket.io": "^2.1.1"
+    },
+    "author": "nate sampo"
+}
