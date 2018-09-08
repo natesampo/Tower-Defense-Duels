@@ -1,5 +1,52 @@
 var socket = io();
 
+class Point {
+  constructor(x, y) {
+    this.x = x;
+    this.y = y;
+  }
+
+  distanceTo(x, y) {
+    return Math.sqrt((x - this.x)*(x - this.x) + (y - this.y)*(y - this.y));
+  }
+}
+
+class Projectile {
+  constructor(x, y, type, range, speed, damage, impact, direction, movement, owner) {
+    this.x = x;
+    this.y = y;
+    this.start = {x: this.x, y: this.y};
+    this.type = type;
+    this.range = range;
+    this.speed = speed;
+    this.damage = damage;
+    this.impact = impact;
+    this.direction = direction;
+    this.movement = movement;
+    this.owner = owner;
+  }
+
+  tick() {
+    this.x += this.speed * this.direction.x;
+    this.y += this.speed * this.direction.y;
+
+    if (this.range < Math.sqrt((this.x - this.start.x)*(this.x - this.start.x)+(this.y - this.start.y)*(this.y - this.start.y))) {
+      for (var i in projectiles) {
+        if (projectiles[i] == this) {
+          projectiles.splice(i, 1);
+          break;
+        }
+      }
+    }
+  }
+}
+
+class Dart extends Projectile {
+  constructor(x, y, direction, owner) {
+    super(x, y, 'dart', 0.5, 0.01, 1, null, direction, 'straight', owner)
+  }
+}
+
 class Tower {
   constructor(built, x, y, cost, size, color, range, attackTime, damage, projectile, target, owner) {
     this.built = built;
@@ -14,7 +61,52 @@ class Tower {
     this.projectile = projectile;
     this.target = target;
     this.owner = owner;
+    this.canHitDistances = [];
     this.lastAttackTime = 0;
+  }
+
+  placed() {
+    this.getRange();
+  }
+
+  getRange() {
+    var step = 0.01;
+    var walker = tracks[0].lengths[0];
+    var start = 0;
+    var edge = 0;
+    var withinRange = false;
+    var prev = tracks[0].vertices[0];
+    var vertex = tracks[0].vertices[1];
+    for (var dist=0; dist<tracks[0].distance; dist += step) {
+      if (!tracks[0].lengths[edge + 1]) {
+        if (withinRange) {
+          withinRange = false;
+          this.canHitDistances[this.canHitDistances.length-1].push(dist);
+        }
+        break;
+      } else if (dist >= walker) {
+        edge += 1;
+        start = walker;
+        walker += tracks[0].lengths[edge];
+        prev = tracks[0].vertices[edge];
+        vertex = tracks[0].vertices[edge + 1];
+      }
+
+      if (this.range + 0.01 > Math.sqrt((prev.x + (vertex.x - prev.x) * ((dist - start) / (walker - start)) - this.x)*(prev.x + (vertex.x - prev.x) * ((dist - start) / (walker - start)) - this.x) + (prev.y + (vertex.y - prev.y) * ((dist - start) / (walker - start)) - this.y)*(prev.y + (vertex.y - prev.y) * ((dist - start) / (walker - start)) - this.y))) {
+        if (!withinRange) {
+          withinRange = true;
+          this.canHitDistances.push([dist]);
+        }
+      } else if (withinRange) {
+        withinRange = false;
+        this.canHitDistances[this.canHitDistances.length-1].push(dist);
+      }
+    }
+
+    if (withinRange) {
+      withinRange = false;
+      this.canHitDistances[this.canHitDistances.length-1].push(dist);
+    }
   }
 
   tick() {
@@ -24,18 +116,48 @@ class Tower {
         this.y = mouseY/screen.height;
       }
     } else {
-      if (this.lastAttackTime == 0) {
-        this.lastAttackTime = time;
-      }
-
       if (time - this.lastAttackTime > this.attackTime) {
+        var distance;
+        var distanceID;
+
         for (var i in player.enemies) {
           var enemy = player.enemies[i];
 
-          if (this.range >= Math.sqrt((enemy.x - this.x)*(enemy.x - this.x) + (enemy.y - this.y)*(enemy.y - this.y))) {
-            socket.emit('attack', enemy, this.damage);
-            this.lastAttackTime += this.attackTime;
+          for (var j in this.canHitDistances) {
+            if (enemy.progress > this.canHitDistances[j][0] && enemy.progress < this.canHitDistances[j][1]) {
+              switch (this.target) {
+                case 'first':
+                  if (!distance || enemy.progress > distance) {
+                    distance = enemy.progress;
+                    distanceID = i;
+                  }
+                  break;
+                case 'last':
+                  if (!distance || enemy.progress < distance) {
+                    distance = enemy.progress;
+                    distanceID = i;
+                  }
+                  break;
+                case 'close':
+                  if (!distance || Math.sqrt((enemy.x - this.x)*(enemy.x - this.x)+(enemy.y - this.y)*(enemy.y - this.y)) < distance) {
+                    distance = Math.sqrt((enemy.x - this.x)*(enemy.x - this.x)+(enemy.y - this.y)*(enemy.y - this.y));
+                    distanceID = i;
+                  }
+                  break;
+              }
+
+              break;
+            }
           }
+        }
+
+        if (distanceID) {
+          var tempX = player.enemies[distanceID].x - this.x;
+          var tempY = player.enemies[distanceID].y - this.y;
+          var newProjectile = new Dart(this.x, this.y, {x: tempX / Math.sqrt(tempX*tempX + tempY*tempY), y: tempY / Math.sqrt(tempX*tempX + tempY*tempY)}, this);
+          projectiles.push(newProjectile);
+          socket.emit('attack', newProjectile);
+          this.lastAttackTime = time;
         }
       }
     }
@@ -67,23 +189,9 @@ class Tower {
   }
 }
 
-class Projectile {
-  constructor(x, y, type, range, speed, damage, impact, movement, owner) {
-    this.x = x;
-    this.y = y;
-    this.type = type;
-    this.range = range;
-    this.speed = speed;
-    this.damage = damage;
-    this.impact = impact;
-    this.movement = movement;
-    this.owner = owner;
-  }
-}
-
 class Archer extends Tower {
   constructor(x, y) {
-    super(false, x, y, 100, 0.03, 'brown', 0.2, 1000, 1, 'dart', 'first', socket.id);
+    super(false, x, y, 100, 0.03, 'brown', 0.2, 500, 1, 'dart', defaultTarget, socket.id);
   }
 }
 
@@ -114,10 +222,12 @@ var trackWidth;
 var tracks = [];
 var buttons = [];
 var towers = [];
+var projectiles = [];
 var time = 0;
 var lastIncome = 0;
 var mouseX = 0;
 var mouseY = 0;
+var defaultTarget = 'first';
 
 socket.on('state', function(game, buttonList) {
   time = game.time;
@@ -216,7 +326,6 @@ socket.on('state', function(game, buttonList) {
     if (time - lastIncome >= player.incomeTime) {
       lastIncome += player.incomeTime;
       socket.emit('income');
-      console.log('income');
     }
 
     if (holding && holding) {
@@ -240,6 +349,10 @@ socket.on('state', function(game, buttonList) {
 
     for (var i in towers) {
       towers[i].tick();
+    }
+
+    for (var i=projectiles.length-1; i>=0; i--) {
+      projectiles[i].tick();
     }
 
     for (var i in player.towers) {
@@ -283,6 +396,30 @@ socket.on('state', function(game, buttonList) {
       context.fill();
       context.closePath();
     }
+
+    for (var i in player.projectiles) {
+      var projectile = player.projectiles[i];
+      
+      context.lineWidth = 4;
+      context.strokeStyle = 'black';
+      context.beginPath();
+      context.moveTo(projectile.x*screen.width, projectile.y*screen.height);
+      context.lineTo(projectile.x*screen.width - 32*projectile.direction.x, projectile.y*screen.height - 32*projectile.direction.y);
+      context.stroke();
+      context.closePath();
+    }
+
+    for (var i in opponent.projectiles) {
+      var projectile = opponent.projectiles[i];
+      
+      context.lineWidth = 4;
+      context.strokeStyle = 'black';
+      context.beginPath();
+      context.moveTo(screen.width + projectile.x*screen.width, projectile.y*screen.height);
+      context.lineTo(screen.width + projectile.x*screen.width - 32*projectile.direction.x, projectile.y*screen.height - 32*projectile.direction.y);
+      context.stroke();
+      context.closePath();
+    }
   }
 });
 
@@ -292,6 +429,7 @@ document.addEventListener('click', function(event) {
       holding.built = true;
       socket.emit('built', holding);
       towers.push(holding);
+      holding.placed();
       holding = null;
     }
   } else {

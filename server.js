@@ -8,16 +8,17 @@ var io = socketIO(server);
 var users = {};
 var games = {};
 var lobby = [];
+var port = 5000;
 
-app.set('port', 5000);
+app.set('port', port);
 app.use('/static', express.static(__dirname + '/static'));
 
 app.get('/', function(request, response) {
   response.sendFile(path.join(__dirname, 'index.html'));
 });
 
-server.listen(5000, function() {
-  console.log('Starting server on port 5000');
+server.listen(port, function() {
+  console.log('Starting server on port ' + port);
 });
 
 class Button {
@@ -69,6 +70,10 @@ class Point {
 		this.x = x;
 		this.y = y;
 	}
+
+	distanceTo(x, y) {
+		return Math.sqrt((x - this.x)*(x - this.x) + (y - this.y)*(y - this.y));
+	}
 }
 
 var buttons = [new Button(side=1, x=0, y=0, width=1, height=1, onClick="purchaseTower(0)")]
@@ -106,17 +111,15 @@ class Enemy {
 		}
 	}
 
-	updateHealth() {
+	takeDamage(damage) {
+		this.hp -= damage;
+
 		if (this.hp < 0) {
 			for (var i=0; i<games[this.gameID].players[this.owner].enemies.length; i++) {
 				if (games[this.gameID].players[this.owner].enemies[i] == this) {
 					games[this.gameID].players[this.owner].enemies.splice(i, 1);
 					break;
 				}
-			}
-		} else {
-			if (this.hp == 1) {
-				this.color = 'red';
 			}
 		}
 	}
@@ -181,12 +184,13 @@ io.on('connection', function(socket) {
     	player.gold -= tower.cost;
     	player.towers.push(tower);
 	});
-	socket.on('attack', function(enemy, damage) {
+	socket.on('attack', function(projectile) {
     	var player = games[users[socket.id].inGame].players[socket.id];
-    	if (player.enemies[enemy]) {
-	    	player.enemies[enemy].hp -= damage;
-	    	player.enemies[enemy].updateHealth();
-	    }
+    	player.projectiles.push(projectile);
+	});
+	socket.on('damage', function(enemyID, damage) {
+    	var player = games[users[socket.id].inGame].players[socket.id];
+    	player.enemies[enemyID].takeDamage(damage);
 	});
 	socket.on('disconnect', function() {
 		if (users[socket.id]) {
@@ -237,6 +241,7 @@ function findMatch(socket) {
 		    incomeTime: 6000,
 		    canBuild: ['Archer'],
 		    towers: [],
+		    projectiles: [],
 		    enemies: []
 		};
 
@@ -251,6 +256,7 @@ function findMatch(socket) {
 		    incomeTime: 6000,
 		    canBuild: ['Archer'],
 		    towers: [],
+		    projectiles: [],
 		    enemies: []
 		}
 
@@ -262,77 +268,92 @@ function findMatch(socket) {
 }
 
 setInterval(function() {
-	for (var i in games) {
-		var game = games[i];
+	try {	
+		for (var i in games) {
+			var game = games[i];
 
-		game.time = new Date() - game.startTime;
+			game.time = new Date() - game.startTime;
 
-		if (waves[game.wave]) {
-			var currWave = waves[game.wave][game.subwave];
+			if (waves[game.wave]) {
+				var currWave = waves[game.wave][game.subwave];
 
-			if (game.waitTime != 0) {
-				if (game.time - game.lastSpawnTime > game.waitTime) {
-					for (var j in game.players) {
-						var player = game.players[j];
-						player.enemies.push(new (eval(currWave.enemy))(owner=player.id, gameID=game.id));
-					}
-
-					game.spawnNumber += 1;
-
-					if (game.spawnNumber >= currWave.quantity) {
-						if (waves[game.wave][game.subwave + 1]) {
-							game.subwave += 1;
-							game.spawnNumber = 0;
-							game.waitTime = currWave.timeAfter;
-						} else {
-							game.wave += 1;
-							game.subwave = 0;
-							game.spawnNumber = 0;
-							game.waitTime = currWave.timeAfter;
+				if (game.waitTime != 0) {
+					if (game.time - game.lastSpawnTime > game.waitTime) {
+						for (var j in game.players) {
+							var player = game.players[j];
+							player.enemies.push(new (eval(currWave.enemy))(owner=player.id, gameID=game.id));
 						}
-					}
 
-					game.lastSpawnTime += game.waitTime;
-					game.waitTime = 0;
-				}
-			} else if (game.spawnNumber < currWave.quantity) {
-				if (game.time - game.lastSpawnTime > currWave.timeBetween) {
-					for (var j in game.players) {
-						var player = game.players[j];
-						player.enemies.push(new (eval(currWave.enemy))(owner=player.id, gameID=game.id));
-					}
+						game.spawnNumber += 1;
 
-					game.spawnNumber += 1;
-
-					if (game.spawnNumber >= currWave.quantity) {
-						if (waves[game.wave][game.subwave + 1]) {
-							game.subwave += 1;
-							game.spawnNumber = 0;
-							game.waitTime = currWave.timeAfter;
-						} else {
-							game.wave += 1;
-							game.subwave = 0;
-							game.spawnNumber = 0;
-							game.waitTime = currWave.timeAfter;
+						if (game.spawnNumber >= currWave.quantity) {
+							if (waves[game.wave][game.subwave + 1]) {
+								game.subwave += 1;
+								game.spawnNumber = 0;
+								game.waitTime = currWave.timeAfter;
+							} else {
+								game.wave += 1;
+								game.subwave = 0;
+								game.spawnNumber = 0;
+								game.waitTime = currWave.timeAfter;
+							}
 						}
-					}
 
-					game.lastSpawnTime += currWave.timeBetween;
+						game.lastSpawnTime += game.waitTime;
+						game.waitTime = 0;
+					}
+				} else if (game.spawnNumber < currWave.quantity) {
+					if (game.time - game.lastSpawnTime > currWave.timeBetween) {
+						for (var j in game.players) {
+							var player = game.players[j];
+							player.enemies.push(new (eval(currWave.enemy))(owner=player.id, gameID=game.id));
+						}
+
+						game.spawnNumber += 1;
+
+						if (game.spawnNumber >= currWave.quantity) {
+							if (waves[game.wave][game.subwave + 1]) {
+								game.subwave += 1;
+								game.spawnNumber = 0;
+								game.waitTime = currWave.timeAfter;
+							} else {
+								game.wave += 1;
+								game.subwave = 0;
+								game.spawnNumber = 0;
+								game.waitTime = currWave.timeAfter;
+							}
+						}
+
+						game.lastSpawnTime += currWave.timeBetween;
+					}
 				}
 			}
-		}
 
-		for (var j in game.players) {
-			var player = game.players[j];
+			for (var j in game.players) {
+				var player = game.players[j];
 
-			for (var k in player.enemies) {
-				game.players[j].enemies[k].tick();
+				for (var k=player.projectiles.length-1; k>=0; k--) {
+					var projectile = player.projectiles[k];
+
+					projectile.x += projectile.speed * projectile.direction.x;
+					projectile.y += projectile.speed * projectile.direction.y;
+
+					if (projectile.range < Math.sqrt((projectile.x - projectile.start.x)*(projectile.x - projectile.start.x)+(projectile.y - projectile.start.y)*(projectile.y - projectile.start.y))) {
+				    	player.projectiles.splice(k, 1);
+					}
+				}
+
+				for (var k in player.enemies) {
+					game.players[j].enemies[k].tick();
+				}
+
+				io.to(player.id).emit('state', game, buttons);
 			}
 
-			io.to(player.id).emit('state', game, buttons);
+			//io.sockets.emit('state', players, buttons, currentTrack);
 		}
-
-		//io.sockets.emit('state', players, buttons, currentTrack);
+	} catch (e) {
+		console.log(e);
 	}
 
 }, 1000 / 60);
