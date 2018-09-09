@@ -266,6 +266,7 @@ class Tower {
   }
 }
 
+//built, upgradeEffects, x, y, cost, size, color, range, attackTime, damage, projectile, target, ability, owner
 class Archer extends Tower {
   constructor(x, y) {
     super(false, {left: [{cost: 100, name: 'Keen Eyes', effect: function(tower) {tower.range = 0.4; tower.getRange();}}, {cost: 150, name: 'Sharper Shots', effect: function(tower) {tower.projectile = 'SharperDart';}}], right: [{cost: 100, name: 'Quick Draw', effect: function(tower) {tower.attackTime = 500;}}]}, x, y, 100, 0.03, 'brown', 0.2, 1000, 1, 'BasicDart', defaultTarget, {name: 'An Ability', cost: 0, effect: null}, socket.id);
@@ -275,6 +276,12 @@ class Archer extends Tower {
 class Sniper extends Tower {
   constructor(x, y) {
     super(false, {left: [{cost: 100, name: '.30 Caliber', effect: function(tower) {tower.damage = 4;}}], right: [{cost: 200, name: 'Rapid Reload', effect: function(tower) {tower.attackTime = 1500;}}]}, x, y, 150, 0.02, 'blue', 1, 2000, 2, null, defaultTarget, {name: 'An Ability', cost: 0, effect: null}, socket.id);
+  }
+}
+
+class ChainGunner extends Tower {
+  constructor(x, y) {
+    super(false, {left: [{cost:500, name: 'Load Faster', effect: function(tower) {tower.attackTime = 300;}}, {cost: 1200, name: 'LOAD EVEN FASTER', effect: function(tower) {tower.attackTime = 150;}], right: [{cost: 6666, name: '10 cm bullets', effect: function(tower) {tower.damage = 5;}}]}, x, y, 1000, 0.02, 'green', .15, 500, 1, null, defaultTarget, {name: 'An Ability', cost: 0, effect: null}, socket.id);
   }
 }
 
