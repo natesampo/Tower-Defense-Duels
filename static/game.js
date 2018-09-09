@@ -285,6 +285,7 @@ class ChainGunner extends Tower {
   }
 }
 
+
 class Button {
   constructor(side, x, y, name, cost, width, height, visible, onClick) {
     this.side = side;
@@ -340,6 +341,7 @@ var defaultTarget = 'first';
 var buttons = [
   new Button(side=0, x=0, y=0, name=function () {return player.canBuild[0];}, cost=function () {var tower = new (eval(player.canBuild[0]))(mouseX, mouseY); return tower.cost;}, width=1, height=1, visible=null, onClick=function() {var tower = new (eval(player.canBuild[0]))(mouseX, mouseY); if (player.gold >= tower.cost) {holding = tower;}}),
   new Button(side=0, x=1, y=0, name=function () {return player.canBuild[1];}, cost=function () {var tower = new (eval(player.canBuild[1]))(mouseX, mouseY); return tower.cost;}, width=1, height=1, visible=null, onClick=function() {var tower = new (eval(player.canBuild[1]))(mouseX, mouseY); if (player.gold >= tower.cost) {holding = tower;}}),
+  new Button(side=0, x=2, y=0, name=function () {return player.canBuild[2];}, cost=function () {var tower = new (eval(player.canBuild[2]))(mouseX, mouseY); return tower.cost;}, width=1, height=1, visible=null, onClick=function() {var tower = new (eval(player.canBuild[2]))(mouseX, mouseY); if (player.gold >= tower.cost) {holding = tower;}}),  
   new Button(side=0, x=0.09, y=1, name=function () {return player.canBuild[0].ability.name;}, cost=function () {var tower = new (eval(player.canBuild[0]))(0, 0); return tower.ability.cost;}, width=0.75, height=0.75, visible=null, onClick=function() {var tower = new (eval(player.canBuild[1]))(mouseX, mouseY); if (player.gold >= tower.cost) {holding = tower;}}),
   new Button(side=0, x=1.09, y=1, name=function () {return player.canBuild[1].ability.name;}, cost=function () {var tower = new (eval(player.canBuild[1]))(0, 0); return tower.ability.cost;}, width=0.75, height=0.75, visible=null, onClick=function() {var tower = new (eval(player.canBuild[1]))(mouseX, mouseY); if (player.gold >= tower.cost) {holding = tower;}}),
   new Button(side=1, x=0, y=0, name=function () {return (selectedObject.upgradeEffects.left[selectedObject.leftUpgrades] ? selectedObject.upgradeEffects.left[selectedObject.leftUpgrades].name : 'No More Upgrades');}, cost=function () {return (selectedObject.upgradeEffects.left[selectedObject.leftUpgrades] ? selectedObject.upgradeEffects.left[selectedObject.leftUpgrades].cost : 0);}, width=2, height=2, visible='tower', onClick=function() {if (selectedObject.upgradeEffects.left[selectedObject.leftUpgrades]) {if (player.gold >= selectedObject.upgradeEffects.left[selectedObject.leftUpgrades].cost) {socket.emit('expense', selectedObject.upgradeEffects.left[selectedObject.leftUpgrades].cost); selectedObject.upgrade('left');}}}),
