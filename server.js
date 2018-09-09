@@ -21,17 +21,6 @@ server.listen(port, function() {
   console.log('Starting server on port ' + port);
 });
 
-class Button {
-	constructor(side, x, y, width, height, onClick) {
-		this.side = side;
-		this.x = x;
-		this.y = y;
-		this.width = width;
-		this.height = height;
-		this.onClick = onClick;
-	}
-}
-
 class Track {
 	constructor(name, vertices) {
 		this.name = name;
@@ -76,11 +65,11 @@ class Point {
 	}
 }
 
-var buttons = [new Button(side=1, x=0, y=0, width=1, height=1, onClick="purchaseTower(0)")]
 var tracks = [new Track(name='track1', vertices=[new Point(0.5, 0), new Point(0.5, 0.2), new Point(0.2, 0.5), new Point(0.3, 0.6), new Point(0.7, 0.2), new Point(0.8, 0.3), new Point(0.5, 0.6), new Point(0.5, 1)])]
 
 class Enemy {
-	constructor(size, color, speed, progress, hp, damage, owner, gameID) {
+	constructor(id, size, color, speed, progress, hp, damage, owner, gameID) {
+		this.id = id;
 		this.progress = progress;
 		this.gameID = gameID;
 		this.owner = owner;
@@ -96,8 +85,8 @@ class Enemy {
 
 	tick() {
 		this.progress += this.speed;
-		if (this.progress < games[gameID].players[this.owner].track.distance) {
-			var location = games[gameID].players[this.owner].track.distanceToXY(this.progress);
+		if (this.progress < games[this.gameID].players[this.owner].track.distance) {
+			var location = games[this.gameID].players[this.owner].track.distanceToXY(this.progress);
 			this.x = location.x;
 			this.y = location.y;
 		} else {
@@ -114,7 +103,7 @@ class Enemy {
 	takeDamage(damage) {
 		this.hp -= damage;
 
-		if (this.hp < 0) {
+		if (this.hp <= 0) {
 			for (var i=0; i<games[this.gameID].players[this.owner].enemies.length; i++) {
 				if (games[this.gameID].players[this.owner].enemies[i] == this) {
 					games[this.gameID].players[this.owner].enemies.splice(i, 1);
@@ -126,14 +115,14 @@ class Enemy {
 }
 
 class Grunt extends Enemy {
-	constructor(owner, gameID) {
-		super(0.015, 'red', 0.002, 0, 1, 1, owner, gameID);
+	constructor(id, owner, gameID) {
+		super(id, 0.015, 'red', 0.002, 0, 1, 1, owner, gameID);
 	}
 }
 
 class Raider extends Enemy {
-	constructor(owner, gameID) {
-		super(0.022, 'blue', 0.0035, 0, 2, 2, owner, gameID);
+	constructor(id, owner, gameID) {
+		super(id, 0.022, 'blue', 0.0035, 0, 2, 2, owner, gameID);
 	}
 }
 
@@ -148,18 +137,21 @@ class Wave {
 
 var waves = [
 	[
-	new Wave(enemy='Grunt', quantity=10, timeBetween=500, timeAfter=20000)
+	new Wave(enemy='Grunt', quantity=10, timeBetween=500, timeAfter=15000)
 	],
 	[
 	new Wave(enemy='Grunt', quantity=10, timeBetween=250, timeAfter=500),
-	new Wave(enemy='Raider', quantity=10, timeBetween=400, timeAfter=15000)
+	new Wave(enemy='Raider', quantity=10, timeBetween=400, timeAfter=10000)
 	],
 	[
 	new Wave(enemy='Grunt', quantity=10, timeBetween=500, timeAfter=1000),
-	new Wave(enemy='Raider', quantity=20, timeBetween=400, timeAfter=15000)
+	new Wave(enemy='Raider', quantity=20, timeBetween=400, timeAfter=10000)
 	],
 	[
-	new Wave(enemy='Raider', quantity=30, timeBetween=300, timeAfter=15000)
+	new Wave(enemy='Raider', quantity=30, timeBetween=300, timeAfter=10000)
+	],
+	[
+	new Wave(enemy='Raider', quantity=100, timeBetween=50, timeAfter=10000)
 	]
 ];
 
@@ -184,13 +176,35 @@ io.on('connection', function(socket) {
     	player.gold -= tower.cost;
     	player.towers.push(tower);
 	});
+	socket.on('expense', function(cost) {
+		var player = games[users[socket.id].inGame].players[socket.id];
+		player.gold -= cost;
+	});
 	socket.on('attack', function(projectile) {
     	var player = games[users[socket.id].inGame].players[socket.id];
     	player.projectiles.push(projectile);
 	});
-	socket.on('damage', function(enemyID, damage) {
-    	var player = games[users[socket.id].inGame].players[socket.id];
-    	player.enemies[enemyID].takeDamage(damage);
+	socket.on('damage', function(enemyID, damage, projectile) {
+		try {
+	    	var player = games[users[socket.id].inGame].players[socket.id];
+
+	    	if (projectile && projectile != null) {
+		    	for (var i in player.projectiles) {
+		    		if (player.projectiles[i].ownerID == projectile.ownerID && player.projectiles[i].id == projectile.id) {
+		    			player.projectiles[i].pierce -= 1;
+
+		    			if (player.projectiles[i].pierce <= 0) {
+		    				player.projectiles.splice(i, 1);
+		    				break;
+		    			}
+		    		}
+		    	}
+		    }
+
+	    	player.enemies[enemyID].takeDamage(damage);
+	    } catch (e) {
+	    	console.log(e);
+	    }
 	});
 	socket.on('disconnect', function() {
 		if (users[socket.id]) {
@@ -227,6 +241,7 @@ function findMatch(socket) {
     		wave: 0,
     		subwave: 0,
     		spawnNumber: 0,
+    		enemyID: 0,
     		players: {}
     	};
 
@@ -239,7 +254,7 @@ function findMatch(socket) {
 		    income: 100,
 		    honor: 1,
 		    incomeTime: 6000,
-		    canBuild: ['Archer'],
+		    canBuild: ['Archer', 'Sniper'],
 		    towers: [],
 		    projectiles: [],
 		    enemies: []
@@ -254,7 +269,7 @@ function findMatch(socket) {
 		    income: 100,
 		    honor: 1,
 		    incomeTime: 6000,
-		    canBuild: ['Archer'],
+		    canBuild: ['Archer', 'Sniper'],
 		    towers: [],
 		    projectiles: [],
 		    enemies: []
@@ -281,7 +296,8 @@ setInterval(function() {
 					if (game.time - game.lastSpawnTime > game.waitTime) {
 						for (var j in game.players) {
 							var player = game.players[j];
-							player.enemies.push(new (eval(currWave.enemy))(owner=player.id, gameID=game.id));
+							player.enemies.push(new (eval(currWave.enemy))(id=game.enemyID, owner=player.id, gameID=game.id));
+							game.enemyID += 1;
 						}
 
 						game.spawnNumber += 1;
@@ -306,7 +322,8 @@ setInterval(function() {
 					if (game.time - game.lastSpawnTime > currWave.timeBetween) {
 						for (var j in game.players) {
 							var player = game.players[j];
-							player.enemies.push(new (eval(currWave.enemy))(owner=player.id, gameID=game.id));
+							player.enemies.push(new (eval(currWave.enemy))(id=game.enemyID, owner=player.id, gameID=game.id));
+							game.enemyID += 1;
 						}
 
 						game.spawnNumber += 1;
@@ -347,7 +364,7 @@ setInterval(function() {
 					game.players[j].enemies[k].tick();
 				}
 
-				io.to(player.id).emit('state', game, buttons);
+				io.to(player.id).emit('state', game);
 			}
 
 			//io.sockets.emit('state', players, buttons, currentTrack);
