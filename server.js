@@ -153,9 +153,9 @@ var waves = [
 	],
 	[
 	new Wave(enemy='Raider', quantity=100, timeBetween=50, timeAfter=10000)
-	]
+	],
 	[
-		new Wave(enemy='Raider', quantity=500, timeBetween=50, timeAfter=10000)
+	new Wave(enemy='Raider', quantity=500, timeBetween=50, timeAfter=10000)
 	]
 ];
 
@@ -258,7 +258,7 @@ function findMatch(socket) {
 		    income: 100,
 		    honor: 1,
 		    incomeTime: 6000,
-		    canBuild: ['Archer', 'Sniper'],
+		    canBuild: ['Archer', 'Sniper', 'ChainGunner'],
 		    towers: [],
 		    projectiles: [],
 		    enemies: []
@@ -273,7 +273,7 @@ function findMatch(socket) {
 		    income: 100,
 		    honor: 1,
 		    incomeTime: 6000,
-		    canBuild: ['Archer', 'Sniper'],
+		    canBuild: ['Archer', 'Sniper', 'ChainGunner'],
 		    towers: [],
 		    projectiles: [],
 		    enemies: []
