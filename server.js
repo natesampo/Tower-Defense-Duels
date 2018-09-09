@@ -126,6 +126,7 @@ class Raider extends Enemy {
 	}
 }
 
+
 class Wave {
 	constructor(enemy, number, timeBetween, timeAfter) {
 		this.enemy = enemy;
@@ -152,6 +153,9 @@ var waves = [
 	],
 	[
 	new Wave(enemy='Raider', quantity=100, timeBetween=50, timeAfter=10000)
+	]
+	[
+		new Wave(enemy='Raider', quantity=500, timeBetween=50, timeAfter=10000)
 	]
 ];
 
