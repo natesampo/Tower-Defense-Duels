@@ -87,8 +87,14 @@ class SharperDart extends Projectile {
   }
 }
 
+class PowerfulBasicDart extends Projectile {
+  constructor(id, x, y, direction, owner) {
+    super(id, x, y, 'black', 0.5, 0.03, 5, 10, null, direction, 'straight', owner)
+  }
+}
+
 class Tower {
-  constructor(built, upgradeEffects, x, y, cost, size, color, range, attackTime, damage, projectile, target, ability, owner) {
+  constructor(built, upgradeEffects, x, y, cost, size, color, range, attackTime, damage, projectile, target, canTarget, ability, owner) {
     this.id = towersBuilt;
     this.upgradeEffects = upgradeEffects;
     this.built = built;
@@ -102,6 +108,7 @@ class Tower {
     this.damage = damage;
     this.projectile = projectile;
     this.target = target;
+    this.ableToTarget = canTarget;
     this.ability = ability;
     this.owner = owner;
     this.canHitDistances = [];
@@ -173,7 +180,7 @@ class Tower {
 
           for (var j in this.canHitDistances) {
             if (enemy.progress > this.canHitDistances[j][0] && enemy.progress < this.canHitDistances[j][1]) {
-              switch (this.target) {
+              switch (this.canTarget[this.target]) {
                 case 'first':
                   if (!distance || enemy.progress > distance) {
                     distance = enemy.progress;
@@ -266,22 +273,22 @@ class Tower {
   }
 }
 
-//built, upgradeEffects, x, y, cost, size, color, range, attackTime, damage, projectile, target, ability, owner
+//built, upgradeEffects, x, y, cost, size, color, range, attackTime, damage, projectile, target, canTarget, ability, owner
 class Archer extends Tower {
   constructor(x, y) {
-    super(false, {left: [{cost: 100, name: 'Keen Eyes', effect: function(tower) {tower.range = 0.4; tower.getRange();}}, {cost: 150, name: 'Sharper Shots', effect: function(tower) {tower.projectile = 'SharperDart';}}], right: [{cost: 100, name: 'Quick Draw', effect: function(tower) {tower.attackTime = 500;}}]}, x, y, 100, 0.03, 'brown', 0.2, 1000, 1, 'BasicDart', defaultTarget, {name: 'An Ability', cost: 0, effect: null}, socket.id);
+    super(false, {left: [{cost: 100, name: 'Keen Eyes', effect: function(tower) {tower.range = 0.4; tower.getRange();}}, {cost: 150, name: 'Sharper Shots', effect: function(tower) {tower.projectile = 'SharperDart';}}], right: [{cost: 100, name: 'Quick Draw', effect: function(tower) {tower.attackTime = 500;}}]}, x, y, 100, 0.03, 'brown', 0.2, 1000, 1, 'BasicDart', defaultTarget, ['first', 'last', 'close'], {name: 'An Ability', cost: 0, effect: null}, socket.id);
   }
 }
 
 class Sniper extends Tower {
   constructor(x, y) {
-    super(false, {left: [{cost: 100, name: '.30 Caliber', effect: function(tower) {tower.damage = 4;}}], right: [{cost: 200, name: 'Rapid Reload', effect: function(tower) {tower.attackTime = 1500;}}]}, x, y, 150, 0.02, 'blue', 1, 2000, 2, null, defaultTarget, {name: 'An Ability', cost: 0, effect: null}, socket.id);
+    super(false, {left: [{cost: 100, name: '.30 Caliber', effect: function(tower) {tower.damage = 4;}}], right: [{cost: 200, name: 'Rapid Reload', effect: function(tower) {tower.attackTime = 1500;}}]}, x, y, 150, 0.02, 'blue', 1, 2000, 2, null, defaultTarget, ['first', 'last', 'close'], {name: 'An Ability', cost: 0, effect: null}, socket.id);
   }
 }
 
-class ChainGunner extends Tower {
+class Chaingunner extends Tower {
   constructor(x, y) {
-    super(false, {left: [{cost:500, name: 'Load Faster', effect: function(tower) {tower.attackTime = 300;}}, {cost: 1200, name: 'LOAD EVEN FASTER', effect: function(tower) {tower.attackTime = 150;}}], right: [{cost: 6666, name: '10 cm bullets', effect: function(tower) {tower.damage = 5;}}]}, x, y, 1000, 0.02, 'green', .15, 500, 1, 'BasicDart', defaultTarget, {name: 'An Ability', cost: 0, effect: null}, socket.id);
+    super(false, {left: [{cost:500, name: 'Load Faster', effect: function(tower) {tower.attackTime = 300;}}, {cost: 1200, name: 'LOAD EVEN FASTER', effect: function(tower) {tower.attackTime = 150;}}], right: [{cost: 66666, name: '10 cm bullets', effect: function(tower) {tower.projectile = 'PowerfulBasicDart';}}]}, x, y, 1000, 0.02, 'gray', .15, 500, 1, 'BasicDart', defaultTarget, ['first', 'last', 'close'], {name: 'An Ability', cost: 0, effect: null}, socket.id);
   }
 }
 
@@ -337,15 +344,17 @@ var lastIncome = 0;
 var mouseX = 0;
 var mouseY = 0;
 var towersBuilt = 0;
-var defaultTarget = 'first';
+var defaultTarget = 0;
 var buttons = [
-  new Button(side=0, x=0, y=0, name=function () {return player.canBuild[0];}, cost=function () {var tower = new (eval(player.canBuild[0]))(mouseX, mouseY); return tower.cost;}, width=1, height=1, visible=null, onClick=function() {var tower = new (eval(player.canBuild[0]))(mouseX, mouseY); if (player.gold >= tower.cost) {holding = tower;}}),
-  new Button(side=0, x=1, y=0, name=function () {return player.canBuild[1];}, cost=function () {var tower = new (eval(player.canBuild[1]))(mouseX, mouseY); return tower.cost;}, width=1, height=1, visible=null, onClick=function() {var tower = new (eval(player.canBuild[1]))(mouseX, mouseY); if (player.gold >= tower.cost) {holding = tower;}}),
-  new Button(side=0, x=2, y=0, name=function () {return player.canBuild[2];}, cost=function () {var tower = new (eval(player.canBuild[2]))(mouseX, mouseY); return tower.cost;}, width=1, height=1, visible=null, onClick=function() {var tower = new (eval(player.canBuild[2]))(mouseX, mouseY); if (player.gold >= tower.cost) {holding = tower;}}),  
-  new Button(side=0, x=0.09, y=1, name=function () {return player.canBuild[0].ability.name;}, cost=function () {var tower = new (eval(player.canBuild[0]))(0, 0); return tower.ability.cost;}, width=0.75, height=0.75, visible=null, onClick=function() {var tower = new (eval(player.canBuild[1]))(mouseX, mouseY); if (player.gold >= tower.cost) {holding = tower;}}),
-  new Button(side=0, x=1.09, y=1, name=function () {return player.canBuild[1].ability.name;}, cost=function () {var tower = new (eval(player.canBuild[1]))(0, 0); return tower.ability.cost;}, width=0.75, height=0.75, visible=null, onClick=function() {var tower = new (eval(player.canBuild[1]))(mouseX, mouseY); if (player.gold >= tower.cost) {holding = tower;}}),
-  new Button(side=1, x=0, y=0, name=function () {return (selectedObject.upgradeEffects.left[selectedObject.leftUpgrades] ? selectedObject.upgradeEffects.left[selectedObject.leftUpgrades].name : 'No More Upgrades');}, cost=function () {return (selectedObject.upgradeEffects.left[selectedObject.leftUpgrades] ? selectedObject.upgradeEffects.left[selectedObject.leftUpgrades].cost : 0);}, width=2, height=2, visible='tower', onClick=function() {if (selectedObject.upgradeEffects.left[selectedObject.leftUpgrades]) {if (player.gold >= selectedObject.upgradeEffects.left[selectedObject.leftUpgrades].cost) {socket.emit('expense', selectedObject.upgradeEffects.left[selectedObject.leftUpgrades].cost); selectedObject.upgrade('left');}}}),
-  new Button(side=1, x=2, y=0, name=function () {return (selectedObject.upgradeEffects.right[selectedObject.rightUpgrades] ? selectedObject.upgradeEffects.right[selectedObject.rightUpgrades].name : 'No More Upgrades');}, cost=function () {return (selectedObject.upgradeEffects.right[selectedObject.rightUpgrades] ? selectedObject.upgradeEffects.right[selectedObject.rightUpgrades].cost : 0);}, width=2, height=2, visible='tower', onClick=function() {if (selectedObject.upgradeEffects.right[selectedObject.rightUpgrades]) {if (player.gold >= selectedObject.upgradeEffects.right[selectedObject.rightUpgrades].cost) {socket.emit('expense', selectedObject.upgradeEffects.right[selectedObject.rightUpgrades].cost); selectedObject.upgrade('right');}}}),
+  new Button(side=0, x=0, y=0, name=function () {return player.canBuild[0];}, cost=function () {var tower = new (eval(player.canBuild[0]))(0, 0); return tower.cost;}, width=1, height=1, visible=null, onClick=function() {var tower = new (eval(player.canBuild[0]))(mouseX, mouseY); if (player.gold >= tower.cost) {holding = tower;}}),
+  new Button(side=0, x=1, y=0, name=function () {return player.canBuild[1];}, cost=function () {var tower = new (eval(player.canBuild[1]))(0, 0); return tower.cost;}, width=1, height=1, visible=null, onClick=function() {var tower = new (eval(player.canBuild[1]))(mouseX, mouseY); if (player.gold >= tower.cost) {holding = tower;}}),
+  new Button(side=0, x=2, y=0, name=function () {return player.canBuild[2];}, cost=function () {var tower = new (eval(player.canBuild[2]))(0, 0); return tower.cost;}, width=1, height=1, visible=null, onClick=function() {var tower = new (eval(player.canBuild[2]))(mouseX, mouseY); if (player.gold >= tower.cost) {holding = tower;}}),  
+  new Button(side=0, x=0.09, y=1, name=function () {return (new (eval(player.canBuild[0]))(0, 0).ability.name);}, cost=function () {var tower = new (eval(player.canBuild[0]))(0, 0); return tower.ability.cost;}, width=0.75, height=0.75, visible=null, onClick=function() {var tower = new (eval(player.canBuild[0]))(0, 0); if (player.gold >= tower.ability.cost) {tower.ability.effect();}}),
+  new Button(side=0, x=1.09, y=1, name=function () {return (new (eval(player.canBuild[1]))(0, 0).ability.name);}, cost=function () {var tower = new (eval(player.canBuild[1]))(0, 0); return tower.ability.cost;}, width=0.75, height=0.75, visible=null, onClick=function() {var tower = new (eval(player.canBuild[1]))(0, 0); if (player.gold >= tower.ability.cost) {tower.ability.effect();}}),
+  new Button(side=0, x=2.09, y=1, name=function () {return (new (eval(player.canBuild[2]))(0, 0).ability.name);}, cost=function () {var tower = new (eval(player.canBuild[2]))(0, 0); return tower.ability.cost;}, width=0.75, height=0.75, visible=null, onClick=function() {var tower = new (eval(player.canBuild[2]))(0, 0); if (player.gold >= tower.ability.cost) {tower.ability.effect();}}),
+  new Button(side=0, x=0, y=0, name=function () {return (selectedObject.upgradeEffects.left[selectedObject.leftUpgrades] ? selectedObject.upgradeEffects.left[selectedObject.leftUpgrades].name : 'No More Upgrades');}, cost=function () {return (selectedObject.upgradeEffects.left[selectedObject.leftUpgrades] ? selectedObject.upgradeEffects.left[selectedObject.leftUpgrades].cost : 0);}, width=2, height=2, visible='tower', onClick=function() {if (selectedObject.upgradeEffects.left[selectedObject.leftUpgrades]) {if (player.gold >= selectedObject.upgradeEffects.left[selectedObject.leftUpgrades].cost) {socket.emit('expense', selectedObject.upgradeEffects.left[selectedObject.leftUpgrades].cost); selectedObject.upgrade('left');}}}),
+  new Button(side=0, x=2, y=0, name=function () {return (selectedObject.upgradeEffects.right[selectedObject.rightUpgrades] ? selectedObject.upgradeEffects.right[selectedObject.rightUpgrades].name : 'No More Upgrades');}, cost=function () {return (selectedObject.upgradeEffects.right[selectedObject.rightUpgrades] ? selectedObject.upgradeEffects.right[selectedObject.rightUpgrades].cost : 0);}, width=2, height=2, visible='tower', onClick=function() {if (selectedObject.upgradeEffects.right[selectedObject.rightUpgrades]) {if (player.gold >= selectedObject.upgradeEffects.right[selectedObject.rightUpgrades].cost) {socket.emit('expense', selectedObject.upgradeEffects.right[selectedObject.rightUpgrades].cost); selectedObject.upgrade('right');}}}),
+  new Button(side=0, x=2, y=0, name=function () {return player.canBuild[2];}, cost=function () {var tower = new (eval(player.canBuild[2]))(0, 0); return tower.cost;}, width=1, height=1, visible=null, onClick=function() {var tower = new (eval(player.canBuild[2]))(mouseX, mouseY); if (player.gold >= tower.cost) {holding = tower;}})
 ];
 
 socket.on('state', function(game) {
@@ -423,10 +432,18 @@ socket.on('state', function(game) {
         context.fillStyle = 'white';
         context.textAlign = 'center';
         context.font = String(0.03*canvas.height) + 'px Arial';
-        context.strokeText(button.cost(), buttonIndent + button.x * (buttonWidth + buttonSpaceX) + button.side * (canvas.width/2 + statsWidth/2) + (button.width * buttonWidth)/2, canvas.height - menuHeight + buttonIndent + button.y * (buttonHeight + buttonSpaceY) + button.height * buttonHeight + 0.008 * screen.height);
-        context.fillText(button.cost(), buttonIndent + button.x * (buttonWidth + buttonSpaceX) + button.side * (canvas.width/2 + statsWidth/2) + (button.width * buttonWidth)/2, canvas.height - menuHeight + buttonIndent + button.y * (buttonHeight + buttonSpaceY) + button.height * buttonHeight + 0.008 * screen.height);
+        context.strokeText(cost, buttonIndent + button.x * (buttonWidth + buttonSpaceX) + button.side * (canvas.width/2 + statsWidth/2) + (button.width * buttonWidth)/2, canvas.height - menuHeight + buttonIndent + button.y * (buttonHeight + buttonSpaceY) + button.height * buttonHeight + 0.008 * screen.height);
+        context.fillText(cost, buttonIndent + button.x * (buttonWidth + buttonSpaceX) + button.side * (canvas.width/2 + statsWidth/2) + (button.width * buttonWidth)/2, canvas.height - menuHeight + buttonIndent + button.y * (buttonHeight + buttonSpaceY) + button.height * buttonHeight + 0.008 * screen.height);
         context.closePath();
       }
+
+      var name = button.name();
+
+      context.font = String(0.01*canvas.height) + 'px Arial';
+      context.beginPath();
+      context.strokeText(name, buttonIndent + button.x * (buttonWidth + buttonSpaceX) + button.side * (canvas.width/2 + statsWidth/2) + (button.width * buttonWidth)/2, canvas.height - menuHeight + buttonIndent + button.y * (buttonHeight + buttonSpaceY) + 0.008 * screen.height);
+      context.fillText(name, buttonIndent + button.x * (buttonWidth + buttonSpaceX) + button.side * (canvas.width/2 + statsWidth/2) + (button.width * buttonWidth)/2, canvas.height - menuHeight + buttonIndent + button.y * (buttonHeight + buttonSpaceY) + 0.008 * screen.height);
+      context.closePath();
     }
   }
 
@@ -462,21 +479,28 @@ socket.on('state', function(game) {
       socket.emit('income');
     }
 
-    if (holding && holding) {
-      holding.tick();
-      context.moveTo(holding.x * screen.width, holding.y * screen.height);
-      context.fillStyle = holding.color;
+    if ((holding && holding != null) || selectedObject != null) {
+      var rangeDraw;
+      (holding && holding != null) ? rangeDraw = holding : rangeDraw = selectedObject;
+
+      rangeDraw.tick();
+      context.moveTo(rangeDraw.x * screen.width, rangeDraw.y * screen.height);
+      context.fillStyle = rangeDraw.color;
       context.beginPath();
-      context.arc(holding.x * screen.width, holding.y * screen.height, holding.size * ((screen.width + screen.height) / 2), 0, 2*Math.PI, false);
+      context.arc(rangeDraw.x * screen.width, rangeDraw.y * screen.height, rangeDraw.size * ((screen.width + screen.height) / 2), 0, 2*Math.PI, false);
       context.fill();
       context.closePath();
-      if (holding.canBuildHere()) {
-        context.fillStyle = 'rgba(50, 50, 50, 0.5)';
+      if (holding && holding != null) {
+        if (holding.canBuildHere()) {
+          context.fillStyle = 'rgba(50, 50, 50, 0.5)';
+        } else {
+          context.fillStyle = 'rgba(255, 0, 0, 0.5)';
+        }
       } else {
-        context.fillStyle = 'rgba(255, 0, 0, 0.5)';
+        context.fillStyle = 'rgba(50, 50, 50, 0.5)';
       }
       context.beginPath();
-      context.arc(holding.x * screen.width, holding.y * screen.height, holding.range * ((screen.width + screen.height) / 2), 0, 2*Math.PI, false);
+      context.arc(rangeDraw.x * screen.width, rangeDraw.y * screen.height, rangeDraw.range * ((screen.width + screen.height) / 2), 0, 2*Math.PI, false);
       context.fill();
       context.closePath();
     }

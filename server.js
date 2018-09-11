@@ -172,21 +172,37 @@ io.on('connection', function(socket) {
     	findMatch(socket);
 	});
 	socket.on('income', function() {
-    	var player = games[users[socket.id].inGame].players[socket.id];
-    	player.gold += player.income * player.honor;
+		try {
+	    	var player = games[users[socket.id].inGame].players[socket.id];
+	    	player.gold += player.income * player.honor;
+	    } catch (e) {
+	    	console.log(e);
+	    }
 	});
 	socket.on('built', function(tower) {
-    	var player = games[users[socket.id].inGame].players[socket.id];
-    	player.gold -= tower.cost;
-    	player.towers.push(tower);
+		try {
+	    	var player = games[users[socket.id].inGame].players[socket.id];
+	    	player.gold -= tower.cost;
+	    	player.towers.push(tower);
+	    } catch (e) {
+	    	console.log(e);
+	    }
 	});
 	socket.on('expense', function(cost) {
-		var player = games[users[socket.id].inGame].players[socket.id];
-		player.gold -= cost;
+		try {
+			var player = games[users[socket.id].inGame].players[socket.id];
+			player.gold -= cost;
+		} catch (e) {
+			console.log(e);
+		}
 	});
 	socket.on('attack', function(projectile) {
-    	var player = games[users[socket.id].inGame].players[socket.id];
-    	player.projectiles.push(projectile);
+		try {
+	    	var player = games[users[socket.id].inGame].players[socket.id];
+	    	player.projectiles.push(projectile);
+	    } catch (e) {
+	    	console.log(e);
+	    }
 	});
 	socket.on('damage', function(enemyID, damage, projectile) {
 		try {
@@ -258,7 +274,7 @@ function findMatch(socket) {
 		    income: 100,
 		    honor: 1,
 		    incomeTime: 6000,
-		    canBuild: ['Archer', 'Sniper', 'ChainGunner'],
+		    canBuild: ['Archer', 'Sniper', 'Chaingunner'],
 		    towers: [],
 		    projectiles: [],
 		    enemies: []
@@ -273,7 +289,7 @@ function findMatch(socket) {
 		    income: 100,
 		    honor: 1,
 		    incomeTime: 6000,
-		    canBuild: ['Archer', 'Sniper', 'ChainGunner'],
+		    canBuild: ['Archer', 'Sniper', 'Chaingunner'],
 		    towers: [],
 		    projectiles: [],
 		    enemies: []
