@@ -16,7 +16,7 @@ class Point {
 }
 
 class Projectile {
-  constructor(id, x, y, color, range, speed, damage, pierce, impact, direction, movement, owner) {
+  constructor(id, x, y, color, range, speed, damage, pierce, penetration, impact, direction, movement, owner) {
     this.id = id;
     this.x = x;
     this.y = y;
@@ -26,6 +26,7 @@ class Projectile {
     this.speed = speed;
     this.damage = damage;
     this.pierce = pierce;
+    this.penetration = penetration;
     this.impact = impact;
     this.direction = direction;
     this.movement = movement;
@@ -56,12 +57,13 @@ class Projectile {
           }
         }
 
-        if (!hit && this.pierce > 0 && enemy.size*2 > getDistance(this.x, this.y, enemy.x, enemy.y)) {
-          socket.emit('damage', i, this.damage, this);
-          this.pierce -= 1;
+        if (!hit && this.penetration > 0 && enemy.size*2 > getDistance(this.x, this.y, enemy.x, enemy.y)) {
+          socket.emit('damage', i, this.damage, this.pierce, this);
+          this.owner.damageDealt += Math.min(enemy.hp, this.damage * (1-((1-this.pierce)*(enemy.armor/(enemy.armor + armorHalfReduction)))));
+          this.penetration -= 1;
           this.alreadyHit.push(enemy.id);
 
-          if (this.pierce <= 0) {
+          if (this.penetration <= 0) {
             for (var j=0; j<projectiles.length; j++) {
               if (projectiles[j] == this) {
                 projectiles.splice(j, 1);
@@ -77,24 +79,30 @@ class Projectile {
 
 class BasicDart extends Projectile {
   constructor(id, x, y, direction, owner) {
-    super(id, x, y, 'black', 0.5, 0.03, 1, 1, null, direction, 'straight', owner)
+    super(id, x, y, 'black', 0.5, 0.03, 1, 0, 1, null, direction, 'straight', owner)
   }
 }
 
 class SharperDart extends Projectile {
   constructor(id, x, y, direction, owner) {
-    super(id, x, y, 'black', 0.5, 0.03, 1, 2, null, direction, 'straight', owner)
+    super(id, x, y, 'black', 0.5, 0.03, 1, 0, 2, null, direction, 'straight', owner)
+  }
+}
+
+class PiercingSharperDart extends Projectile {
+  constructor(id, x, y, direction, owner) {
+    super(id, x, y, 'black', 0.5, 0.03, 1, 0.5, 2, null, direction, 'straight', owner)
   }
 }
 
 class PowerfulBasicDart extends Projectile {
   constructor(id, x, y, direction, owner) {
-    super(id, x, y, 'black', 0.5, 0.03, 5, 10, null, direction, 'straight', owner)
+    super(id, x, y, 'black', 0.5, 0.03, 5, 0, 5, null, direction, 'straight', owner)
   }
 }
 
 class Tower {
-  constructor(built, upgradeEffects, x, y, cost, size, color, range, attackTime, damage, projectile, target, canTarget, ability, owner) {
+  constructor(built, upgradeEffects, x, y, cost, size, color, range, attackTime, damage, pierce, projectile, target, canTarget, canHitInvisible, ability, owner) {
     this.id = towersBuilt;
     this.upgradeEffects = upgradeEffects;
     this.built = built;
@@ -106,9 +114,11 @@ class Tower {
     this.range = range;
     this.attackTime = attackTime;
     this.damage = damage;
+    this.pierce = pierce;
     this.projectile = projectile;
     this.target = target;
-    this.ableToTarget = canTarget;
+    this.canTarget = canTarget;
+    this.canHitInvisible = canHitInvisible;
     this.ability = ability;
     this.owner = owner;
     this.canHitDistances = [];
@@ -116,95 +126,81 @@ class Tower {
     this.shotID = 0;
     this.leftUpgrades = 0;
     this.rightUpgrades = 0;
+    this.damageDealt = 0;
+  }
+
+  sell() {
+    socket.emit('sold', this);
+    for (var i in towers) {
+      var tower = towers[i];
+      if (tower == this) {
+        towers.splice(i, 1);
+        break;
+      }
+    }
+
+    if (selectedObject && selectedObject == this) {
+      selected = null;
+      selectedObject = null;
+    }
   }
 
   placed() {
-    this.getRange();
-  }
-
-  getRange() {
-    var step = 0.01;
-    var walker = tracks[0].lengths[0];
-    var start = 0;
-    var edge = 0;
-    var withinRange = false;
-    var prev = tracks[0].vertices[0];
-    var vertex = tracks[0].vertices[1];
-    for (var dist=0; dist<tracks[0].distance; dist += step) {
-      if (dist >= walker) {
-        if (!tracks[0].lengths[edge + 1]) {
-          if (withinRange) {
-            withinRange = false;
-            this.canHitDistances[this.canHitDistances.length-1].push(dist);
-          }
-          break;
-        } else {
-          edge += 1;
-          start = walker;
-          walker += tracks[0].lengths[edge];
-          prev = tracks[0].vertices[edge];
-          vertex = tracks[0].vertices[edge + 1];
-        }
-      }
-
-      if (this.range + 0.01 > Math.sqrt((prev.x + (vertex.x - prev.x) * ((dist - start) / (walker - start)) - this.x)*(prev.x + (vertex.x - prev.x) * ((dist - start) / (walker - start)) - this.x) + (prev.y + (vertex.y - prev.y) * ((dist - start) / (walker - start)) - this.y)*(prev.y + (vertex.y - prev.y) * ((dist - start) / (walker - start)) - this.y))) {
-        if (!withinRange) {
-          withinRange = true;
-          this.canHitDistances.push([dist]);
-        }
-      } else if (withinRange) {
-        withinRange = false;
-        this.canHitDistances[this.canHitDistances.length-1].push(dist);
-      }
-    }
-
-    if (withinRange) {
-      withinRange = false;
-      this.canHitDistances[this.canHitDistances.length-1].push(dist);
-    }
+    
   }
 
   tick() {
     if (!this.built) {
       if (mouseX && mouseY) {
-        this.x = mouseX/screen.width;
-        this.y = mouseY/screen.height;
+        this.x = mouseX/screen1.width;
+        this.y = mouseY/screen1.height;
       }
     } else {
       if (time - this.lastAttackTime > this.attackTime) {
+        var other;
         var distance;
         var distanceID;
 
         for (var i in player.enemies) {
           var enemy = player.enemies[i];
 
-          for (var j in this.canHitDistances) {
-            if (enemy.progress > this.canHitDistances[j][0] && enemy.progress < this.canHitDistances[j][1]) {
-              switch (this.canTarget[this.target]) {
-                case 'first':
-                  if (!distance || enemy.progress > distance) {
-                    distance = enemy.progress;
-                    distanceID = i;
-                  }
-                  break;
-                case 'last':
-                  if (!distance || enemy.progress < distance) {
-                    distance = enemy.progress;
-                    distanceID = i;
-                  }
-                  break;
-                case 'close':
-                  if (!distance || Math.sqrt((enemy.x - this.x)*(enemy.x - this.x)+(enemy.y - this.y)*(enemy.y - this.y)) < distance) {
-                    distance = Math.sqrt((enemy.x - this.x)*(enemy.x - this.x)+(enemy.y - this.y)*(enemy.y - this.y));
-                    distanceID = i;
-                  }
-                  break;
+          if ((enemy.visible || (enemy.visible == false && this.canHitInvisible)) && this.range + 0.01 > getDistance(enemy.x, enemy.y, this.x, this.y)) {
+            switch (this.canTarget[this.target]) {
+              case 'first':
+                if (!distance || enemy.progress > distance) {
+                  distance = enemy.progress;
+                  distanceID = i;
+                }
+                break;
+              case 'last':
+                if (!distance || enemy.progress < distance) {
+                  distance = enemy.progress;
+                  distanceID = i;
+                }
+                break;
+              case 'close':
+                if (!distance || Math.sqrt((enemy.x - this.x)*(enemy.x - this.x)+(enemy.y - this.y)*(enemy.y - this.y)) < distance) {
+                  distance = Math.sqrt((enemy.x - this.x)*(enemy.x - this.x)+(enemy.y - this.y)*(enemy.y - this.y));
+                  distanceID = i;
+                }
+                break;
+              case 'strong':
+                if ((!other || enemy.maxhp*(1+(enemy.armor/(enemy.armor + armorHalfReduction))) > other) || ((!other || enemy.maxhp*(1+(enemy.armor/(enemy.armor + armorHalfReduction))) == other) && (!distance || enemy.progress >= distance))) {
+                  other = enemy.maxhp*(1+(enemy.armor/(enemy.armor + armorHalfReduction)));
+                  distance = enemy.progress;
+                  distanceID = i;
+                }
+                break;
+              case 'weak':
+                if ((!other || enemy.maxhp*(1+(enemy.armor/(enemy.armor + armorHalfReduction)))) || ((!other || enemy.maxhp*(1+(enemy.armor/(enemy.armor + armorHalfReduction))) == other) && (!distance || enemy.progress >= distance))) {
+                  other = enemy.maxhp*(1+(enemy.armor/(enemy.armor + armorHalfReduction)));
+                  distance = enemy.progress;
+                  distanceID = i;
+                }
+                break;
               }
-
-              break;
             }
           }
-        }
 
         if (distanceID) {
           if (this.projectile && this.projectile != null) {
@@ -214,7 +210,8 @@ class Tower {
             projectiles.push(newProjectile);
             socket.emit('attack', newProjectile);
           } else {
-            socket.emit('damage', distanceID, this.damage, null);
+            socket.emit('damage', distanceID, this.damage, this.pierce, null);
+            this.damageDealt += Math.min(enemy.hp, this.damage * (1-((1-this.pierce)*(enemy.armor/(enemy.armor + armorHalfReduction)))));
           }
           this.shotID += 1;
           this.lastAttackTime = time;
@@ -228,12 +225,14 @@ class Tower {
       case 'left':
         if (this.upgradeEffects.left[this.leftUpgrades]) {
           this.upgradeEffects.left[this.leftUpgrades].effect(this);
+          this.cost += this.upgradeEffects.left[this.leftUpgrades].cost;
           this.leftUpgrades += 1;
         }
         break;
       case 'right':
         if (this.upgradeEffects.right[this.rightUpgrades]) {
           this.upgradeEffects.right[this.rightUpgrades].effect(this);
+          this.cost += this.upgradeEffects.right[this.rightUpgrades].cost;
           this.rightUpgrades += 1;
         }
         break;
@@ -253,19 +252,23 @@ class Tower {
     }
 
     var step = 0.1;
-    var walker = {x: tracks[0].vertices[0].x*screen.width, y: tracks[0].vertices[0].y*screen.height};
 
-    for (var i=1; i<tracks[0].vertices.length; i++) {
-      var curr = {x: tracks[0].vertices[i].x*screen.width, y: tracks[0].vertices[i].y*screen.height};
-      var prev = {x: tracks[0].vertices[i-1].x*screen.width, y: tracks[0].vertices[i-1].y*screen.height};
+    for (var p in tracks[0].paths) {
+      var path = tracks[0].paths[p];
+      var walker = {x: path.vertices[0].x*screen1.width, y: path.vertices[0].y*screen1.height};
 
-      for (var j=0; j<=1/step; j++) {
-        if (this.size*((screen.width + screen.height) / 2) + trackWidth/2 > Math.sqrt((walker.x - this.x * screen.width)*(walker.x - this.x * screen.width) + (walker.y - this.y * screen.height)*(walker.y - this.y * screen.height))) {
-          return false;
+      for (var i=1; i<path.vertices.length; i++) {
+        var curr = {x: path.vertices[i].x*screen1.width, y: path.vertices[i].y*screen1.height};
+        var prev = {x: path.vertices[i-1].x*screen1.width, y: path.vertices[i-1].y*screen1.height};
+
+        for (var j=0; j<=1/step; j++) {
+          if (this.size*((screen1.width + screen1.height) / 2) + trackWidth/2 > Math.sqrt((walker.x - this.x * screen1.width)*(walker.x - this.x * screen1.width) + (walker.y - this.y * screen1.height)*(walker.y - this.y * screen1.height))) {
+            return false;
+          }
+
+          walker.x = prev.x + (curr.x - prev.x) * (j * step);
+          walker.y = prev.y + (curr.y - prev.y) * (j * step);
         }
-
-        walker.x = prev.x + (curr.x - prev.x) * (j * step);
-        walker.y = prev.y + (curr.y - prev.y) * (j * step);
       }
     }
 
@@ -276,22 +279,28 @@ class Tower {
 //built, upgradeEffects, x, y, cost, size, color, range, attackTime, damage, projectile, target, canTarget, ability, owner
 class Archer extends Tower {
   constructor(x, y) {
-    super(false, {left: [{cost: 100, name: 'Keen Eyes', effect: function(tower) {tower.range = 0.4; tower.getRange();}}, {cost: 150, name: 'Sharper Shots', effect: function(tower) {tower.projectile = 'SharperDart';}}], right: [{cost: 100, name: 'Quick Draw', effect: function(tower) {tower.attackTime = 500;}}]}, x, y, 100, 0.03, 'brown', 0.2, 1000, 1, 'BasicDart', defaultTarget, ['first', 'last', 'close'], {name: 'An Ability', cost: 0, effect: null}, socket.id);
+    super(false, {left: [{cost: 100, name: 'Keen Eyes', effect: function(tower) {tower.range = 0.4; tower.canHitInvisible = true;}}, {cost: 150, name: 'Sharper Shots', effect: function(tower) {tower.projectile = 'SharperDart';}}], right: [{cost: 100, name: 'Quick Draw', effect: function(tower) {tower.attackTime = 500;}}]}, x, y, 100, 0.03, 'brown', 0.2, 1000, 0, 0, 'BasicDart', defaultTarget, ['first', 'last', 'strong', 'weak', 'close'], false, {name: 'An Ability', cost: 0, effect: null}, socket.id);
   }
 }
 
 class Sniper extends Tower {
   constructor(x, y) {
-    super(false, {left: [{cost: 100, name: '.30 Caliber', effect: function(tower) {tower.damage = 4;}}], right: [{cost: 200, name: 'Rapid Reload', effect: function(tower) {tower.attackTime = 1500;}}]}, x, y, 150, 0.02, 'blue', 1, 2000, 2, null, defaultTarget, ['first', 'last', 'close'], {name: 'An Ability', cost: 0, effect: null}, socket.id);
+    super(false, {left: [{cost: 100, name: '.30 Caliber', effect: function(tower) {tower.damage = 4;}}, {cost: 200, name: '.50 Caliber', effect: function(tower) {tower.damage = 5; tower.pierce = 0.3;}}], right: [{cost: 200, name: 'Rapid Reload', effect: function(tower) {tower.attackTime = 1500;}}]}, x, y, 150, 0.02, 'blue', 1, 2000, 2, 0, null, defaultTarget, ['first', 'last', 'strong', 'weak', 'close'], true, {name: 'An Ability', cost: 0, effect: null}, socket.id);
   }
 }
 
 class Chaingunner extends Tower {
   constructor(x, y) {
-    super(false, {left: [{cost:500, name: 'Load Faster', effect: function(tower) {tower.attackTime = 300;}}, {cost: 1200, name: 'LOAD EVEN FASTER', effect: function(tower) {tower.attackTime = 150;}}], right: [{cost: 66666, name: '10 cm bullets', effect: function(tower) {tower.projectile = 'PowerfulBasicDart';}}]}, x, y, 1000, 0.02, 'gray', .15, 500, 1, 'BasicDart', defaultTarget, ['first', 'last', 'close'], {name: 'An Ability', cost: 0, effect: null}, socket.id);
+    super(false, {left: [{cost:500, name: 'Load Faster', effect: function(tower) {tower.attackTime = 300;}}, {cost: 1200, name: 'LOAD EVEN FASTER', effect: function(tower) {tower.attackTime = 150;}}], right: [{cost: 66666, name: '10 cm bullets', effect: function(tower) {tower.projectile = 'PowerfulBasicDart';}}]}, x, y, 1000, 0.02, 'gray', .15, 500, 0, 0, 'BasicDart', defaultTarget, ['first', 'last', 'strong', 'weak', 'close'], false, {name: 'An Ability', cost: 0, effect: null}, socket.id);
   }
 }
 
+class Deceiver extends Tower {
+  constructor(x, y) {
+    super(false, {left: [], right: [{cost: 100, name: 'Trick the Track', effect: function(tower) {maxSize = 0.4; vertexPlaced = 0; vertexAvailable = 2; selected = 'oppTrack'; selectedObject = []; tower.trackPiece = selectedObject;}}]}, x, y, 150, 0.02, 'white', 0, 0, 0, 0, null, null, [], true, {name: 'An Ability', cost: 0, effect: null}, socket.id);
+    this.trackPiece;
+  }
+}
 
 class Button {
   constructor(side, x, y, name, cost, width, height, visible, onClick) {
@@ -311,30 +320,51 @@ socket.on('message', function(data) {
   console.log(data);
 });
 
-var canvas = document.getElementById('canvas');
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
-var context = canvas.getContext('2d');
+var back = document.getElementById('back');
+back.width = window.innerWidth;
+back.height = window.innerHeight;
+back.style.position = 'absolute';
+back.style.top = 0;
+back.style.left = 0;
+var backContext = back.getContext('2d');
 
-context.fillStyle = 'black';
-context.textAlign = 'center';
-context.font = '32px Arial';
-context.fillText('Finding Match', canvas.width/2, canvas.height/10);
+backContext.fillStyle = 'black';
+backContext.textAlign = 'center';
+backContext.font = '32px Arial';
+backContext.fillText('Finding Match', back.width/2, back.height/10);
+
+var screen1 = document.getElementById('meScreen');
+screen1.style.position = 'absolute';
+screen1.style.top = 0;
+screen1.style.left = 0;
+var screen1draw = screen1.getContext('2d');
+
+var screen2 = document.getElementById('oppScreen');
+screen2.style.position = 'absolute';
+screen2.style.top = 0;
+screen2.style.left = back.width/2;
+var screen2draw = screen2.getContext('2d');
 
 var buttonWidth;
 var buttonHeight;
-var buttonIndent;
+var buttonIndentX;
+var buttonIndentY;
 var buttonSpaceX;
 var buttonSpaceY;
 var menuHeight;
 var statsWidth;
-var screen;
 var player;
 var opponent;
 var holding;
 var trackWidth;
+var gameObject;
+var min = {x: null, y: null, distance: null, path: null, prev: null, next: null, progress: null};
+var vertexPlaced = 0;
+var vertexAvailable = 0;
+var maxSize = 0;
 var selected = null;
 var selectedObject = null;
+var placeMultiple = false;
 var tracks = [];
 var buttons = [];
 var towers = [];
@@ -345,164 +375,120 @@ var mouseX = 0;
 var mouseY = 0;
 var towersBuilt = 0;
 var defaultTarget = 0;
+var armorHalfReduction = 10;
 var buttons = [
-  new Button(side=0, x=0, y=0, name=function () {return player.canBuild[0];}, cost=function () {var tower = new (eval(player.canBuild[0]))(0, 0); return tower.cost;}, width=1, height=1, visible=null, onClick=function() {var tower = new (eval(player.canBuild[0]))(mouseX, mouseY); if (player.gold >= tower.cost) {holding = tower;}}),
-  new Button(side=0, x=1, y=0, name=function () {return player.canBuild[1];}, cost=function () {var tower = new (eval(player.canBuild[1]))(0, 0); return tower.cost;}, width=1, height=1, visible=null, onClick=function() {var tower = new (eval(player.canBuild[1]))(mouseX, mouseY); if (player.gold >= tower.cost) {holding = tower;}}),
-  new Button(side=0, x=2, y=0, name=function () {return player.canBuild[2];}, cost=function () {var tower = new (eval(player.canBuild[2]))(0, 0); return tower.cost;}, width=1, height=1, visible=null, onClick=function() {var tower = new (eval(player.canBuild[2]))(mouseX, mouseY); if (player.gold >= tower.cost) {holding = tower;}}),  
-  new Button(side=0, x=0.09, y=1, name=function () {return (new (eval(player.canBuild[0]))(0, 0).ability.name);}, cost=function () {var tower = new (eval(player.canBuild[0]))(0, 0); return tower.ability.cost;}, width=0.75, height=0.75, visible=null, onClick=function() {var tower = new (eval(player.canBuild[0]))(0, 0); if (player.gold >= tower.ability.cost) {tower.ability.effect();}}),
-  new Button(side=0, x=1.09, y=1, name=function () {return (new (eval(player.canBuild[1]))(0, 0).ability.name);}, cost=function () {var tower = new (eval(player.canBuild[1]))(0, 0); return tower.ability.cost;}, width=0.75, height=0.75, visible=null, onClick=function() {var tower = new (eval(player.canBuild[1]))(0, 0); if (player.gold >= tower.ability.cost) {tower.ability.effect();}}),
-  new Button(side=0, x=2.09, y=1, name=function () {return (new (eval(player.canBuild[2]))(0, 0).ability.name);}, cost=function () {var tower = new (eval(player.canBuild[2]))(0, 0); return tower.ability.cost;}, width=0.75, height=0.75, visible=null, onClick=function() {var tower = new (eval(player.canBuild[2]))(0, 0); if (player.gold >= tower.ability.cost) {tower.ability.effect();}}),
-  new Button(side=0, x=0, y=0, name=function () {return (selectedObject.upgradeEffects.left[selectedObject.leftUpgrades] ? selectedObject.upgradeEffects.left[selectedObject.leftUpgrades].name : 'No More Upgrades');}, cost=function () {return (selectedObject.upgradeEffects.left[selectedObject.leftUpgrades] ? selectedObject.upgradeEffects.left[selectedObject.leftUpgrades].cost : 0);}, width=2, height=2, visible='tower', onClick=function() {if (selectedObject.upgradeEffects.left[selectedObject.leftUpgrades]) {if (player.gold >= selectedObject.upgradeEffects.left[selectedObject.leftUpgrades].cost) {socket.emit('expense', selectedObject.upgradeEffects.left[selectedObject.leftUpgrades].cost); selectedObject.upgrade('left');}}}),
-  new Button(side=0, x=2, y=0, name=function () {return (selectedObject.upgradeEffects.right[selectedObject.rightUpgrades] ? selectedObject.upgradeEffects.right[selectedObject.rightUpgrades].name : 'No More Upgrades');}, cost=function () {return (selectedObject.upgradeEffects.right[selectedObject.rightUpgrades] ? selectedObject.upgradeEffects.right[selectedObject.rightUpgrades].cost : 0);}, width=2, height=2, visible='tower', onClick=function() {if (selectedObject.upgradeEffects.right[selectedObject.rightUpgrades]) {if (player.gold >= selectedObject.upgradeEffects.right[selectedObject.rightUpgrades].cost) {socket.emit('expense', selectedObject.upgradeEffects.right[selectedObject.rightUpgrades].cost); selectedObject.upgrade('right');}}}),
-  new Button(side=0, x=2, y=0, name=function () {return player.canBuild[2];}, cost=function () {var tower = new (eval(player.canBuild[2]))(0, 0); return tower.cost;}, width=1, height=1, visible=null, onClick=function() {var tower = new (eval(player.canBuild[2]))(mouseX, mouseY); if (player.gold >= tower.cost) {holding = tower;}})
+  new Button(side=0, x=0, y=0, name=function () {return player.canBuild[0];}, cost=function () {var tower = new (eval(player.canBuild[0]))(0, 0); return tower.cost;}, width=1, height=1, visible=function() {return null}, onClick=function() {var tower = new (eval(player.canBuild[0]))(mouseX, mouseY); if (player.gold >= tower.cost) {holding = tower;}}),
+  new Button(side=0, x=1, y=0, name=function () {return player.canBuild[1];}, cost=function () {var tower = new (eval(player.canBuild[1]))(0, 0); return tower.cost;}, width=1, height=1, visible=function() {return null}, onClick=function() {var tower = new (eval(player.canBuild[1]))(mouseX, mouseY); if (player.gold >= tower.cost) {holding = tower;}}),
+  new Button(side=0, x=2, y=0, name=function () {return player.canBuild[2];}, cost=function () {var tower = new (eval(player.canBuild[2]))(0, 0); return tower.cost;}, width=1, height=1, visible=function() {return null}, onClick=function() {var tower = new (eval(player.canBuild[2]))(mouseX, mouseY); if (player.gold >= tower.cost) {holding = tower;}}),  
+  new Button(side=0, x=0.09, y=1, name=function () {return (new (eval(player.canBuild[0]))(0, 0).ability.name);}, cost=function () {var tower = new (eval(player.canBuild[0]))(0, 0); return tower.ability.cost;}, width=0.75, height=0.75, visible=function() {return null}, onClick=function() {var tower = new (eval(player.canBuild[0]))(0, 0); if (player.gold >= tower.ability.cost) {tower.ability.effect();}}),
+  new Button(side=0, x=1.09, y=1, name=function () {return (new (eval(player.canBuild[1]))(0, 0).ability.name);}, cost=function () {var tower = new (eval(player.canBuild[1]))(0, 0); return tower.ability.cost;}, width=0.75, height=0.75, visible=function() {return null}, onClick=function() {var tower = new (eval(player.canBuild[1]))(0, 0); if (player.gold >= tower.ability.cost) {tower.ability.effect();}}),
+  new Button(side=0, x=2.09, y=1, name=function () {return (new (eval(player.canBuild[2]))(0, 0).ability.name);}, cost=function () {var tower = new (eval(player.canBuild[2]))(0, 0); return tower.ability.cost;}, width=0.75, height=0.75, visible=function() {return null}, onClick=function() {var tower = new (eval(player.canBuild[2]))(0, 0); if (player.gold >= tower.ability.cost) {tower.ability.effect();}}),
+  new Button(side=0, x=3, y=0, name=function () {return (selectedObject.upgradeEffects.left[selectedObject.leftUpgrades] ? selectedObject.upgradeEffects.left[selectedObject.leftUpgrades].name : 'No More Upgrades');}, cost=function () {return (selectedObject.upgradeEffects.left[selectedObject.leftUpgrades] ? selectedObject.upgradeEffects.left[selectedObject.leftUpgrades].cost : 0);}, width=2, height=2, visible=function() {return 'tower'}, onClick=function() {if (selectedObject.upgradeEffects.left[selectedObject.leftUpgrades]) {if (player.gold >= selectedObject.upgradeEffects.left[selectedObject.leftUpgrades].cost) {socket.emit('expense', selectedObject.upgradeEffects.left[selectedObject.leftUpgrades].cost); selectedObject.upgrade('left');}}}),
+  new Button(side=0, x=5, y=0, name=function () {return (selectedObject.upgradeEffects.right[selectedObject.rightUpgrades] ? selectedObject.upgradeEffects.right[selectedObject.rightUpgrades].name : 'No More Upgrades');}, cost=function () {return (selectedObject.upgradeEffects.right[selectedObject.rightUpgrades] ? selectedObject.upgradeEffects.right[selectedObject.rightUpgrades].cost : 0);}, width=2, height=2, visible=function() {return 'tower'}, onClick=function() {if (selectedObject.upgradeEffects.right[selectedObject.rightUpgrades]) {if (player.gold >= selectedObject.upgradeEffects.right[selectedObject.rightUpgrades].cost) {socket.emit('expense', selectedObject.upgradeEffects.right[selectedObject.rightUpgrades].cost); selectedObject.upgrade('right');}}}),
+  new Button(side=1, x=0, y=1.5, name=function () {return 'Previous Target'}, cost=function () {return 0;}, width=0.5, height=0.5, visible=function() {if (selected == 'tower' && selectedObject != null && selectedObject.canTarget.length > 1) {return 'tower'} else {return ''};}, onClick=function() {selectedObject.target = ((selectedObject.target - 1) + selectedObject.canTarget.length) % selectedObject.canTarget.length;}),
+  new Button(side=1, x=2, y=1.5, name=function () {return 'Next Target'}, cost=function () {return 0;}, width=0.5, height=0.5, visible=function() {if (selected == 'tower' && selectedObject != null && selectedObject.canTarget.length > 1) {return 'tower'} else {return ''};}, onClick=function() {selectedObject.target = (selectedObject.target + 1) % selectedObject.canTarget.length;})
 ];
 
 socket.on('state', function(game) {
+  if (!gameObject) {
+    for (let i=0; i<game.spawnable.length; i++) {
+      buttons.push(new Button(side=1, x=Math.floor(i/2), y=i%2, name=function() {return game.spawnable[i].enemy;}, cost=function() {return game.spawnable[i].cost;}, width=1, height=1, visible=function() {if (game.spawnable[i].wave <= game.wave) {return null} else {return ''};}, onClick=function() {socket.emit('spawn', i);}));
+    }
+  }
+
+  gameObject = game;
   time = game.time;
 
-  canvas = document.getElementById('canvas');
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
-  context = canvas.getContext('2d');
+  back.width = window.innerWidth;
+  back.height = window.innerHeight;
+  backContext = back.getContext('2d');
 
-  buttonWidth = 0.03 * canvas.width;
-  buttonHeight = 0.06 * canvas.height;
-  buttonIndent = 0.01 * canvas.width;
-  buttonSpaceX = 0.01 * canvas.width;
-  buttonSpaceY = 0.02 * canvas.height;
-  menuHeight = 0.2 * canvas.height
-  statsWidth = 0.1 * canvas.width;
+  menuHeight = 0.2 * back.height;
+  statsWidth = 0.1 * back.width;
+
+  screen1.width = back.width/2;
+  screen1.height = back.height - menuHeight;
+  screen1draw = screen1.getContext('2d');
+
+  screen2.width = back.width/2;
+  screen2.height = back.height - menuHeight;
+  screen2.style.left = back.width/2;
+  screen2draw = screen2.getContext('2d');
 
   player = game.players[socket.id];
   opponent = game.players[player.opponent];
   tracks = [player.track, opponent.track];
-  screen = {width: canvas.width/2, height: canvas.height - menuHeight};
-  trackWidth = 0.05 * ((screen.width + screen.height) / 2);
+  trackWidth = 0.05 * ((screen1.width + screen1.height) / 2);
 
-  context.clearRect(0, 0, canvas.width, canvas.height);
+  buttonIndentX = 0.01 * back.width;
+  buttonIndentY = 0.02 * back.height;
+  buttonSpaceX = 0.01 * back.width;
+  buttonSpaceY = 0.02 * back.height;
+  buttonWidth = (screen1.width - (2 * buttonIndentX + 9 * buttonSpaceY))/10;
+  buttonHeight = (menuHeight - (2 * buttonIndentY + buttonSpaceY))/2;
 
-  context.fillStyle = 'green';
-  context.fillRect(0, 0, canvas.width, canvas.height);
+  backContext.clearRect(0, 0, back.width, back.height);
+  screen1draw.clearRect(0, 0, screen1.width, screen1.height);
+  screen2draw.clearRect(0, 0, screen2.width, screen2.height);
+
+  screen1draw.fillStyle = 'green';
+  screen2draw.fillStyle = 'green';
+  screen1draw.fillRect(0, 0, screen1.width, screen1.height);
+  screen2draw.fillRect(0, 0, screen2.width, screen2.height);
 
   if (tracks.length > 0) {
-    context.beginPath();
-    context.lineWidth = trackWidth;
-    context.strokeStyle = 'white';
-    for (var i in tracks[0].vertices) {
-      var vertex = tracks[0].vertices[i];
-      context.lineTo(vertex.x * screen.width, vertex.y * screen.height);
-      context.stroke();
-    }
-    context.closePath();
-
-    context.beginPath();
-    context.lineWidth = trackWidth;
-    context.strokeStyle = 'white';
-    for (var i in tracks[1].vertices) {
-      var vertex = tracks[1].vertices[i];
-      context.lineTo(screen.width + vertex.x * screen.width, vertex.y * screen.height);
-      context.stroke();
-    }
-    context.closePath();
-  }
-
-  context.fillStyle = 'brown';
-  context.fillRect(0, canvas.height - menuHeight, canvas.width, menuHeight);
-
-  context.lineWidth = 0.002 * canvas.width;
-  context.strokeStyle = 'black';
-  context.beginPath();
-  context.moveTo(canvas.width/2, 0);
-  context.lineTo(canvas.width/2, canvas.height);
-  context.stroke();
-  context.closePath();
-
-  for (var i in buttons) {
-    var button = buttons[i];
-    if (button.visible == selected) {
-      context.beginPath();
-      context.rect(buttonIndent + button.x * (buttonWidth + buttonSpaceX) + button.side * (canvas.width/2 + statsWidth/2), canvas.height - menuHeight + buttonIndent + button.y * (buttonHeight + buttonSpaceY), button.width * buttonWidth, button.height * buttonHeight);
-      context.stroke();
-      context.closePath();
-
-      var cost = button.cost();
-
-      if (cost != 0) {
-        context.beginPath();
-        context.fillStyle = 'white';
-        context.textAlign = 'center';
-        context.font = String(0.03*canvas.height) + 'px Arial';
-        context.strokeText(cost, buttonIndent + button.x * (buttonWidth + buttonSpaceX) + button.side * (canvas.width/2 + statsWidth/2) + (button.width * buttonWidth)/2, canvas.height - menuHeight + buttonIndent + button.y * (buttonHeight + buttonSpaceY) + button.height * buttonHeight + 0.008 * screen.height);
-        context.fillText(cost, buttonIndent + button.x * (buttonWidth + buttonSpaceX) + button.side * (canvas.width/2 + statsWidth/2) + (button.width * buttonWidth)/2, canvas.height - menuHeight + buttonIndent + button.y * (buttonHeight + buttonSpaceY) + button.height * buttonHeight + 0.008 * screen.height);
-        context.closePath();
+    screen1draw.lineWidth = trackWidth;
+    screen1draw.strokeStyle = 'white';
+    for (var i in tracks[0].paths) {
+      screen1draw.beginPath();
+      for (var j in tracks[0].paths[i].vertices) {
+        var vertex = tracks[0].paths[i].vertices[j];
+        screen1draw.lineTo(vertex.x * screen1.width, vertex.y * screen1.height);
+        screen1draw.stroke();
       }
+      screen1draw.closePath();
+    }
 
-      var name = button.name();
-
-      context.font = String(0.01*canvas.height) + 'px Arial';
-      context.beginPath();
-      context.strokeText(name, buttonIndent + button.x * (buttonWidth + buttonSpaceX) + button.side * (canvas.width/2 + statsWidth/2) + (button.width * buttonWidth)/2, canvas.height - menuHeight + buttonIndent + button.y * (buttonHeight + buttonSpaceY) + 0.008 * screen.height);
-      context.fillText(name, buttonIndent + button.x * (buttonWidth + buttonSpaceX) + button.side * (canvas.width/2 + statsWidth/2) + (button.width * buttonWidth)/2, canvas.height - menuHeight + buttonIndent + button.y * (buttonHeight + buttonSpaceY) + 0.008 * screen.height);
-      context.closePath();
+    screen2draw.lineWidth = trackWidth;
+    screen2draw.strokeStyle = 'white';
+    for (var i in tracks[1].paths) {
+      screen2draw.beginPath();
+      for (var j in tracks[1].paths[i].vertices) {
+        var vertex = tracks[1].paths[i].vertices[j];
+        screen2draw.lineTo(vertex.x * screen1.width, vertex.y * screen2.height);
+        screen2draw.stroke();
+      }
+      screen2draw.closePath();
     }
   }
-
-  context.fillStyle = 'black';
-  context.fillRect(canvas.width/2 - statsWidth/2, canvas.height - menuHeight, statsWidth, menuHeight);
-
-  context.fillStyle = 'white';
-  context.textAlign = 'center';
-  context.font = String(0.02*canvas.height) + 'px Arial';
-  context.fillText(Math.floor(time/1000), canvas.width/2, canvas.height - menuHeight + 0.03*canvas.height);
 
   if (player) {
-    context.fillStyle = 'red';
-    context.fillText(player.lives, canvas.width/2, canvas.height - menuHeight + 0.07*canvas.height);
-
-    context.fillStyle = 'yellow';
-    context.fillText(player.gold, canvas.width/2, canvas.height - menuHeight + 0.11*canvas.height);
-
-    context.textAlign = 'right';
-    context.fillStyle = 'green';
-    context.fillText(player.income, canvas.width/2 - 0.008*canvas.width, canvas.height - menuHeight + 0.15*canvas.height);
-
-    context.textAlign = 'center';
-    context.fillStyle = 'white';
-    context.fillText('x', canvas.width/2, canvas.height - menuHeight + 0.15*canvas.height);
-
-    context.textAlign = 'left';
-    context.fillStyle = 'gray';
-    context.fillText(player.honor.toFixed(2), canvas.width/2 + 0.008*canvas.width, canvas.height - menuHeight + 0.15*canvas.height);
-
     if (time - lastIncome >= player.incomeTime) {
       lastIncome += player.incomeTime;
-      socket.emit('income');
+      socket.emit('income', player.income * player.honor);
     }
 
-    if ((holding && holding != null) || selectedObject != null) {
+    if ((holding && holding != null) || (selected == 'tower' && selectedObject != null)) {
       var rangeDraw;
       (holding && holding != null) ? rangeDraw = holding : rangeDraw = selectedObject;
 
       rangeDraw.tick();
-      context.moveTo(rangeDraw.x * screen.width, rangeDraw.y * screen.height);
-      context.fillStyle = rangeDraw.color;
-      context.beginPath();
-      context.arc(rangeDraw.x * screen.width, rangeDraw.y * screen.height, rangeDraw.size * ((screen.width + screen.height) / 2), 0, 2*Math.PI, false);
-      context.fill();
-      context.closePath();
+      screen1draw.beginPath();
+      screen1draw.fillStyle = rangeDraw.color;
+      screen1draw.arc(rangeDraw.x * screen1.width, rangeDraw.y * screen1.height, rangeDraw.size * ((screen1.width + screen1.height) / 2), 0, 2*Math.PI, false);
+      screen1draw.fill();
       if (holding && holding != null) {
         if (holding.canBuildHere()) {
-          context.fillStyle = 'rgba(50, 50, 50, 0.5)';
+          screen1draw.fillStyle = 'rgba(50, 50, 50, 0.5)';
         } else {
-          context.fillStyle = 'rgba(255, 0, 0, 0.5)';
+          screen1draw.fillStyle = 'rgba(255, 0, 0, 0.5)';
         }
       } else {
-        context.fillStyle = 'rgba(50, 50, 50, 0.5)';
+        screen1draw.fillStyle = 'rgba(50, 50, 50, 0.5)';
       }
-      context.beginPath();
-      context.arc(rangeDraw.x * screen.width, rangeDraw.y * screen.height, rangeDraw.range * ((screen.width + screen.height) / 2), 0, 2*Math.PI, false);
-      context.fill();
-      context.closePath();
+      screen1draw.arc(rangeDraw.x * screen1.width, rangeDraw.y * screen1.height, rangeDraw.range * ((screen1.width + screen1.height) / 2), 0, 2*Math.PI, false);
+      screen1draw.fill();
+      screen1draw.closePath();
     }
 
     for (var i in towers) {
@@ -516,68 +502,304 @@ socket.on('state', function(game) {
     for (var i in player.towers) {
       var tower = player.towers[i];
       
-      context.moveTo(tower.x * screen.width, tower.y * screen.height);
-      context.fillStyle = tower.color;
-      context.beginPath();
-      context.arc(tower.x * screen.width, tower.y * screen.height, tower.size * ((screen.width + screen.height) / 2), 0, 2*Math.PI, false);
-      context.fill();
-      context.closePath();
+      screen1draw.moveTo(tower.x * screen1.width, tower.y * screen1.height);
+      screen1draw.fillStyle = tower.color;
+      screen1draw.beginPath();
+      screen1draw.arc(tower.x * screen1.width, tower.y * screen1.height, tower.size * ((screen1.width + screen1.height) / 2), 0, 2*Math.PI, false);
+      screen1draw.fill();
+      screen1draw.closePath();
     }
 
     for (var i in opponent.towers) {
       var tower = opponent.towers[i];
       
-      context.moveTo(screen.width + tower.x * screen.width, tower.y * screen.height);
-      context.fillStyle = tower.color;
-      context.beginPath();
-      context.arc(screen.width + tower.x * screen.width, tower.y * screen.height, tower.size * ((screen.width + screen.height) / 2), 0, 2*Math.PI, false);
-      context.fill();
-      context.closePath();
+      screen2draw.moveTo(tower.x * screen1.width, tower.y * screen1.height);
+      screen2draw.fillStyle = tower.color;
+      screen2draw.beginPath();
+      screen2draw.arc(tower.x * screen1.width, tower.y * screen1.height, tower.size * ((screen1.width + screen1.height) / 2), 0, 2*Math.PI, false);
+      screen2draw.fill();
+      screen2draw.closePath();
     }
 
     for (var i in player.enemies) {
       var enemy = player.enemies[i];
 
-      context.fillStyle = enemy.color;
-      context.beginPath();
-      context.arc(enemy.x * screen.width, enemy.y * screen.height, enemy.size * ((screen.width + screen.height) / 2), 0, 2*Math.PI, false);
-      context.fill();
-      context.closePath();
+      screen1draw.lineWidth = 0.0025 * (back.width + back.height)/2;
+      screen1draw.strokeStyle = enemy.outline;
+      screen1draw.fillStyle = enemy.color;
+      screen1draw.beginPath();
+      screen1draw.arc(enemy.x * screen1.width, enemy.y * screen1.height, enemy.size * ((screen1.width + screen1.height) / 2), 0, 2*Math.PI, false);
+      screen1draw.stroke();
+      screen1draw.fill();
+      screen1draw.closePath();
     }
 
     for (var i in opponent.enemies) {
       var enemy = opponent.enemies[i];
 
-      context.fillStyle = enemy.color;
-      context.beginPath();
-      context.arc(screen.width + enemy.x * screen.width, enemy.y * screen.height, enemy.size * ((screen.width + screen.height) / 2), 0, 2*Math.PI, false);
-      context.fill();
-      context.closePath();
+      screen2draw.lineWidth = 0.003 * (back.width + back.height)/2;
+      screen2draw.strokeStyle = enemy.outline;
+      screen2draw.fillStyle = enemy.color;
+      screen2draw.beginPath();
+      screen2draw.arc(enemy.x * screen1.width, enemy.y * screen1.height, enemy.size * ((screen1.width + screen1.height) / 2), 0, 2*Math.PI, false);
+      screen2draw.stroke();
+      screen2draw.fill();
+      screen2draw.closePath();
     }
 
     for (var i in player.projectiles) {
       var projectile = player.projectiles[i];
       
-      context.lineWidth = 4;
-      context.strokeStyle = projectile.color;
-      context.beginPath();
-      context.moveTo(projectile.x*screen.width, projectile.y*screen.height);
-      context.lineTo(projectile.x*screen.width - 32*projectile.direction.x, projectile.y*screen.height - 32*projectile.direction.y);
-      context.stroke();
-      context.closePath();
+      screen1draw.lineWidth = 0.003 * (back.width + back.height)/2;
+      screen1draw.strokeStyle = projectile.color;
+      screen1draw.beginPath();
+      screen1draw.moveTo(projectile.x*screen1.width, projectile.y*screen1.height);
+      screen1draw.lineTo(projectile.x*screen1.width - 32*projectile.direction.x, projectile.y*screen1.height - 32*projectile.direction.y);
+      screen1draw.stroke();
+      screen1draw.closePath();
     }
 
     for (var i in opponent.projectiles) {
       var projectile = opponent.projectiles[i];
       
-      context.lineWidth = 4;
-      context.strokeStyle = projectile.color;
-      context.beginPath();
-      context.moveTo(screen.width + projectile.x*screen.width, projectile.y*screen.height);
-      context.lineTo(screen.width + projectile.x*screen.width - 32*projectile.direction.x, projectile.y*screen.height - 32*projectile.direction.y);
-      context.stroke();
-      context.closePath();
+      screen2draw.lineWidth = 0.0025 * (back.width + back.height)/2;
+      screen2draw.strokeStyle = projectile.color;
+      screen2draw.beginPath();
+      screen2draw.moveTo(projectile.x*screen1.width, projectile.y*screen1.height);
+      screen2draw.lineTo(projectile.x*screen1.width - 32*projectile.direction.x, projectile.y*screen1.height - 32*projectile.direction.y);
+      screen2draw.stroke();
+      screen2draw.closePath();
     }
+  }
+
+  backContext.fillStyle = 'brown';
+  backContext.fillRect(0, back.height - menuHeight, back.width, menuHeight);
+
+  backContext.lineWidth = 0.002 * back.width;
+  backContext.strokeStyle = 'black';
+  backContext.beginPath();
+  backContext.moveTo(back.width/2, 0);
+  backContext.lineTo(back.width/2, back.height);
+  backContext.stroke();
+  backContext.closePath();
+
+  for (var i in buttons) {
+    var button = buttons[i];
+    if (button.visible() == selected) {
+      backContext.beginPath();
+      backContext.rect(buttonIndentX + button.x * (buttonWidth + buttonSpaceX) + button.side * (back.width/2 + statsWidth/2), back.height - menuHeight + buttonIndentY + button.y * (buttonHeight + buttonSpaceY), button.width * buttonWidth, button.height * buttonHeight);
+      backContext.stroke();
+      backContext.closePath();
+
+      var cost = button.cost();
+
+      if (cost != 0) {
+        backContext.fillStyle = 'white';
+        backContext.textAlign = 'center';
+        backContext.font = String(0.03*back.height) + 'px Arial';
+        backContext.beginPath();
+        backContext.strokeText(cost, buttonIndentX + button.x * (buttonWidth + buttonSpaceX) + button.side * (back.width/2 + statsWidth/2) + (button.width * buttonWidth)/2, back.height - menuHeight + buttonIndentY + button.y * (buttonHeight + buttonSpaceY) + button.height * buttonHeight + 0.008 * screen1.height);
+        backContext.fillText(cost, buttonIndentX + button.x * (buttonWidth + buttonSpaceX) + button.side * (back.width/2 + statsWidth/2) + (button.width * buttonWidth)/2, back.height - menuHeight + buttonIndentY + button.y * (buttonHeight + buttonSpaceY) + button.height * buttonHeight + 0.008 * screen1.height);
+        backContext.closePath();
+      }
+
+      var name = button.name();
+
+      if (name != null) {
+        backContext.fillStyle = 'white';
+        backContext.textAlign = 'center';
+        backContext.font = String(0.01*back.height) + 'px Arial';
+        backContext.beginPath();
+        backContext.strokeText(name, buttonIndentX + button.x * (buttonWidth + buttonSpaceX) + button.side * (back.width/2 + statsWidth/2) + (button.width * buttonWidth)/2, back.height - menuHeight + buttonIndentY + button.y * (buttonHeight + buttonSpaceY) + 0.008 * screen1.height);
+        backContext.fillText(name, buttonIndentX + button.x * (buttonWidth + buttonSpaceX) + button.side * (back.width/2 + statsWidth/2) + (button.width * buttonWidth)/2, back.height - menuHeight + buttonIndentY + button.y * (buttonHeight + buttonSpaceY) + 0.008 * screen1.height);
+        backContext.closePath();
+      }
+    }
+  }
+
+  if (selected == 'tower' && selectedObject.canTarget.length > 0) {
+    if (selectedObject.canTarget.length > 0) {
+      backContext.fillStyle = 'white';
+      backContext.textAlign = 'center';
+      backContext.font = String(0.02*back.height) + 'px Arial';
+      backContext.beginPath();
+      backContext.strokeText('Damage Dealt: ' + Math.round(selectedObject.damageDealt), buttonIndentX + 0.41 * (buttonWidth + buttonSpaceX) + back.width/2 + statsWidth/2 + buttonWidth, back.height - menuHeight + buttonIndentY + 0.675 * (buttonHeight + buttonSpaceY) + 0.008 * screen1.height);
+      backContext.fillText('Damage Dealt: ' + Math.round(selectedObject.damageDealt), buttonIndentX + 0.41 * (buttonWidth + buttonSpaceX) + back.width/2 + statsWidth/2 + buttonWidth, back.height - menuHeight + buttonIndentY + 0.675 * (buttonHeight + buttonSpaceY) + 0.008 * screen1.height);
+      backContext.closePath();
+    }
+
+    backContext.beginPath();
+    backContext.strokeRect(buttonIndentX, back.height - menuHeight + buttonIndentY, 2*buttonWidth, 2*buttonHeight + buttonIndentY);
+    backContext.closePath();
+
+    backContext.fillStyle = 'white';
+    backContext.textAlign = 'center';
+    backContext.font = String(0.02*back.height) + 'px Arial';
+    backContext.beginPath();
+    backContext.strokeText(selectedObject.canTarget[selectedObject.target], buttonIndentX + 0.41 * (buttonWidth + buttonSpaceX) + back.width/2 + statsWidth/2 + buttonWidth, back.height - menuHeight + buttonIndentY + 1.675 * (buttonHeight + buttonSpaceY) + 0.008 * screen1.height);
+    backContext.fillText(selectedObject.canTarget[selectedObject.target], buttonIndentX + 0.41 * (buttonWidth + buttonSpaceX) + back.width/2 + statsWidth/2 + buttonWidth, back.height - menuHeight + buttonIndentY + 1.675 * (buttonHeight + buttonSpaceY) + 0.008 * screen1.height);
+    backContext.closePath();
+  } else if (selected == 'enemy' && selectedObject != null) {
+    var found = false;
+    for (var i in player.enemies) {
+      if (player.enemies[i].id == selectedObject.id) {
+        selectedObject = player.enemies[i];
+        found = true;
+        break;
+      }
+    }
+
+    if (!found) {
+      for (var i in opponent.enemies) {
+        if (opponent.enemies[i].id == selectedObject.id) {
+          selectedObject = opponent.enemies[i];
+          found = true;
+          break;
+        }
+      }
+
+      if (!found) {
+        selectedObject.hp = 0;
+      }
+    }
+
+    backContext.beginPath();
+    backContext.strokeRect(buttonIndentX, back.height - menuHeight + buttonIndentY, 2*buttonWidth, 2*buttonHeight + buttonIndentY);
+    backContext.closePath();
+
+    backContext.lineWidth = 0.002 * back.width;
+    backContext.beginPath();
+    backContext.strokeRect(buttonIndentX + 2*buttonWidth + 2*buttonSpaceX, back.height - menuHeight + buttonIndentY + buttonHeight/2, 4*buttonWidth, buttonHeight/3);
+    backContext.closePath();
+
+    backContext.fillStyle = 'red';
+    backContext.beginPath();
+    backContext.fillRect(buttonIndentX + 2*buttonWidth + 2*buttonSpaceX, back.height - menuHeight + buttonIndentY + buttonHeight/2, 4*buttonWidth, buttonHeight/3);
+    backContext.closePath();
+
+    backContext.fillStyle = 'green';
+    backContext.beginPath();
+    backContext.fillRect(buttonIndentX + 2*buttonWidth + 2*buttonSpaceX, back.height - menuHeight + buttonIndentY + buttonHeight/2, (selectedObject.hp/selectedObject.maxhp) * (4*buttonWidth), buttonHeight/3);
+    backContext.closePath();
+
+    backContext.fillStyle = 'white';
+    backContext.textAlign = 'center';
+    backContext.beginPath();
+    backContext.font = String(0.02*back.height) + 'px Arial';
+    backContext.strokeText(selectedObject.name, buttonIndentX + 2*buttonWidth + 2*buttonSpaceX + 2*buttonWidth, back.height - menuHeight + buttonIndentY + buttonHeight/4);
+    backContext.fillText(selectedObject.name, buttonIndentX + 2*buttonWidth + 2*buttonSpaceX + 2*buttonWidth, back.height - menuHeight + buttonIndentY + buttonHeight/4);
+    backContext.font = String(0.015*back.height) + 'px Arial';
+    backContext.strokeText(Math.ceil(selectedObject.hp) + '/' + selectedObject.maxhp, buttonIndentX + 2*buttonWidth + 2*buttonSpaceX + 2*buttonWidth, back.height - menuHeight + buttonIndentY + buttonHeight/2 + buttonHeight/4.5);
+    backContext.fillText(Math.ceil(selectedObject.hp) + '/' + selectedObject.maxhp, buttonIndentX + 2*buttonWidth + 2*buttonSpaceX + 2*buttonWidth, back.height - menuHeight + buttonIndentY + buttonHeight/2 + buttonHeight/4.5);
+    backContext.closePath();
+
+    backContext.textAlign = 'left';
+    backContext.beginPath();
+    backContext.strokeText('Damage: ' + selectedObject.damage, buttonIndentX + 2*buttonWidth + 2*buttonSpaceX, back.height - menuHeight + buttonIndentY + 1.1*buttonHeight);
+    backContext.fillText('Damage: ' + selectedObject.damage, buttonIndentX + 2*buttonWidth + 2*buttonSpaceX, back.height - menuHeight + buttonIndentY + 1.1*buttonHeight);
+    backContext.closePath();
+
+    backContext.textAlign = 'right';
+    backContext.beginPath();
+    backContext.strokeText('Armor: ' + selectedObject.armor, buttonIndentX + 2*buttonWidth + 2*buttonSpaceX + 4*buttonWidth, back.height - menuHeight + buttonIndentY + 1.1*buttonHeight);
+    backContext.fillText('Armor: ' + selectedObject.armor, buttonIndentX + 2*buttonWidth + 2*buttonSpaceX + 4*buttonWidth, back.height - menuHeight + buttonIndentY + 1.1*buttonHeight);
+    backContext.closePath();
+  } else if (selected == 'oppTrack') {
+    if (mouseX >= screen1.width && mouseY <= back.height - menuHeight) {
+      min.distance = null;
+      min.x = null;
+      min.y = null;
+      min.path = null;
+      min.prev = null;
+      min.next = null;
+      min.progress = null;
+
+      var step = 0.1;
+      var dist = 0;
+      var size = 0;
+      var path;
+      var walker;
+      var curr;
+      var prev;
+
+      for (var p in tracks[1].paths) {
+        path = tracks[1].paths[p];
+        walker = {x: path.vertices[0].x, y: path.vertices[0].y};
+        for (var i=1; i<path.vertices.length; i++) {
+          curr = {x: path.vertices[i].x, y: path.vertices[i].y};
+          prev = {x: path.vertices[i-1].x, y: path.vertices[i-1].y};
+
+          for (var j=1; j<=1/step; j++) {
+            dist = getDistance(walker.x*screen1.width + screen1.width, walker.y*screen1.height, mouseX, mouseY);
+
+            if (vertexPlaced > 0) {
+              size = getDistance(walker.x, walker.y, selectedObject[vertexPlaced-1].vertex.x, selectedObject[vertexPlaced-1].vertex.y);
+            }
+
+            if ((min.distance == null || min.distance > dist) && maxSize >= size) {
+              min.distance = dist;
+              min.x = walker.x;
+              min.y = walker.y;
+              min.path = parseInt(p);
+              min.prev = i-1;
+              min.next = i;
+              min.progress = 0;
+              for (var k=0; k<i-1; k++) {
+                min.progress += path.lengths[k];
+              }
+              min.progress += path.lengths[i-1] * (j * step);
+            }
+
+            walker.x = prev.x + (curr.x - prev.x) * (j * step);
+            walker.y = prev.y + (curr.y - prev.y) * (j * step);
+          }
+        }
+      }
+
+      if (min != null && min.x != null  && min.y != null ) {
+        screen2draw.fillStyle = 'red';
+        screen2draw.beginPath();
+        screen2draw.arc(min.x*screen1.width, min.y*screen1.height, 0.05 * ((screen1.width + screen1.height) / 2), 0, 2*Math.PI, false);
+        screen2draw.fill();
+        screen2draw.closePath();
+      }
+
+      for (var i in selectedObject) {
+        screen2draw.fillStyle = 'red';
+        screen2draw.beginPath();
+        screen2draw.arc(selectedObject[i].vertex.x*screen1.width, selectedObject[i].vertex.y*screen1.height, 0.05 * ((screen1.width + screen1.height) / 2), 0, 2*Math.PI, false);
+        screen2draw.fill();
+        screen2draw.closePath();
+      }
+    }
+  }
+
+  backContext.fillStyle = 'black';
+  backContext.fillRect(back.width/2 - statsWidth/2, back.height - menuHeight, statsWidth, menuHeight);
+
+  backContext.fillStyle = 'white';
+  backContext.textAlign = 'center';
+  backContext.font = String(0.02*back.height) + 'px Arial';
+  backContext.fillText(Math.floor(time/1000), back.width/2, back.height - menuHeight + 0.03*back.height);
+
+  if (player) {
+    backContext.fillStyle = 'red';
+    backContext.fillText(player.lives, back.width/2, back.height - menuHeight + 0.07*back.height);
+
+    backContext.fillStyle = 'yellow';
+    backContext.fillText(player.gold, back.width/2, back.height - menuHeight + 0.11*back.height);
+
+    backContext.textAlign = 'right';
+    backContext.fillStyle = 'green';
+    backContext.fillText(player.income, back.width/2 - 0.008*back.width, back.height - menuHeight + 0.15*back.height);
+
+    backContext.textAlign = 'center';
+    backContext.fillStyle = 'white';
+    backContext.fillText('x', back.width/2, back.height - menuHeight + 0.15*back.height);
+
+    backContext.textAlign = 'left';
+    backContext.fillStyle = 'gray';
+    backContext.fillText(player.honor.toFixed(2), back.width/2 + 0.008*back.width, back.height - menuHeight + 0.15*back.height);
   }
 });
 
@@ -588,29 +810,73 @@ document.addEventListener('click', function(event) {
       socket.emit('built', holding);
       towers.push(holding);
       holding.placed();
-      selected = 'tower';
-      selectedObject = holding;
-      holding = null;
       towersBuilt += 1;
+      if (placeMultiple) {
+        var tower = new (eval(holding.constructor.name))(0, 0);
+        if (player.gold >= tower.cost) {
+          holding = tower;
+        } else {
+          selected = 'tower';
+          selectedObject = holding;
+          holding = null;
+        }
+      } else {
+        selected = 'tower';
+        selectedObject = holding;
+        holding = null;
+      }
+    }
+  } else if ((selected == 'oppTrack' || selected == 'ownTrack') && (event.clientX >= screen1.width && event.clientY <= screen1.height)) {
+    if (min != null && min.x != null  && min.y != null && vertexPlaced < vertexAvailable) {
+      vertexPlaced += 1;
+      selectedObject.push({vertex: new Point(min.x, min.y), path: min.path, prev: min.prev, next: min.next, progress: min.progress});
+
+      if (vertexPlaced == vertexAvailable) {
+        socket.emit(selected, selectedObject);
+        vertexAvailable = 0;
+        vertexPlaced = 0;
+        maxSize = 0;
+        selected = null;
+        selectedObject = null;
+      }
     }
   } else {
+
     for (var i=0; i<buttons.length; i++) {
       var button = buttons[i];
-      if (button.visible == selected && event.clientX > buttonIndent + button.x * (buttonWidth + buttonSpaceX) + button.side * (canvas.width/2 + statsWidth/2) && event.clientX < buttonIndent + button.x * (buttonWidth + buttonSpaceX) + button.side * (canvas.width/2 + statsWidth/2) + button.width * buttonWidth && event.clientY > canvas.height - menuHeight + buttonIndent + button.y * (buttonHeight + buttonSpaceY) && event.clientY < canvas.height - menuHeight + buttonIndent + button.y * (buttonHeight + buttonSpaceY) + button.height * buttonHeight) {
+      if (button.visible() == selected && event.clientX > buttonIndentX + button.x * (buttonWidth + buttonSpaceX) + button.side * (back.width/2 + statsWidth/2) && event.clientX < buttonIndentX + button.x * (buttonWidth + buttonSpaceX) + button.side * (back.width/2 + statsWidth/2) + button.width * buttonWidth && event.clientY > back.height - menuHeight + buttonIndentY + button.y * (buttonHeight + buttonSpaceY) && event.clientY < back.height - menuHeight + buttonIndentY + button.y * (buttonHeight + buttonSpaceY) + button.height * buttonHeight) {
         button.onClick();
       }
     }
 
     for (var i in towers) {
       var tower = towers[i];
-      if (tower.size*((screen.width+screen.height)/2) > getDistance(tower.x*screen.width, tower.y*screen.height, event.clientX, event.clientY)) {
+      if (tower.size*((screen1.width+screen1.height)/2) > getDistance(tower.x*screen1.width, tower.y*screen1.height, event.clientX, event.clientY)) {
         selected = 'tower';
-        selectedObject = towers[i];
+        selectedObject = tower;
         return;
       }
     }
 
-    if (event.clientY < canvas.height - menuHeight) {
+    for (var i in player.enemies) {
+      var enemy = player.enemies[i];
+      if (enemy.size*((screen1.width+screen1.height)/2) > getDistance(enemy.x*screen1.width, enemy.y*screen1.height, event.clientX, event.clientY)) {
+        selected = 'enemy';
+        selectedObject = enemy;
+        return;
+      }
+    }
+
+    for (var i in opponent.enemies) {
+      var enemy = opponent.enemies[i];
+      if (enemy.size*((screen1.width+screen1.height)/2) > getDistance(enemy.x*screen1.width, enemy.y*screen1.height, event.clientX - screen1.width, event.clientY)) {
+        selected = 'enemy';
+        selectedObject = enemy;
+        return;
+      }
+    }
+
+    if (event.clientY < back.height - menuHeight) {
       selected = null;
       selectedObject = null;
     }
@@ -620,7 +886,7 @@ document.addEventListener('click', function(event) {
 document.onmousemove = function(event) {
   event = event || window.event;
 
-  if (mouseY < canvas.height - menuHeight && event.clientY > canvas.height - menuHeight) {
+  if (mouseY < back.height - menuHeight && event.clientY > back.height - menuHeight) {
     holding = null;
   }
 
@@ -629,37 +895,35 @@ document.onmousemove = function(event) {
 };
 
 document.addEventListener('keydown', function(event) {
-  /*switch (event.keyCode) {
-    case 65: // A
-      movement.left = true;
+  console.log(event.keyCode);
+  switch (event.keyCode) {
+    case 8: // Backspace
+      selectedObject.sell();
+      break;
+    case 16: // Shift
+      placeMultiple = true;
+      break;
+    case 27: // ESC
+      break;
+    case 81: // Q
+      if (selected == 'tower' && selectedObject.canTarget.length > 1) {
+        selectedObject.target = (selectedObject.target - 1 + selectedObject.canTarget.length) % selectedObject.canTarget.length;
+      }
       break;
     case 87: // W
-      movement.up = true;
+      if (selected == 'tower' && selectedObject.canTarget.length > 1) {
+        selectedObject.target = (selectedObject.target + 1) % selectedObject.canTarget.length;
+      }
       break;
-    case 68: // D
-      movement.right = true;
-      break;
-    case 83: // S
-      movement.down = true;
-      break;
-  }*/
+  }
 });
 
 document.addEventListener('keyup', function(event) {
-  /*switch (event.keyCode) {
-    case 65: // A
-      movement.left = false;
+  switch (event.keyCode) {
+    case 16: // Shift
+      placeMultiple = false;
       break;
-    case 87: // W
-      movement.up = false;
-      break;
-    case 68: // D
-      movement.right = false;
-      break;
-    case 83: // S
-      movement.down = false;
-      break;
-  }*/
+  }
 });
 
 socket.emit('new player');

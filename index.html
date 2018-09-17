@@ -1,8 +1,8 @@
 <html>
   <head>
-    <title>A Multiplayer Game</title>
+    <title>Poseidon's Pride</title>
     <style>
-      *, canvas {
+      *, canvas, html {
         margin: 0;
         padding: 0;
       }
@@ -10,7 +10,9 @@
     <script src="/socket.io/socket.io.js"></script>
   </head>
   <body>
-    <canvas id="canvas"></canvas>
+    <canvas id="meScreen"></canvas>
+    <canvas id="oppScreen"></canvas>
+    <canvas id="back"></canvas>
   </body>
   <script src="/static/game.js"></script>
 </html>
