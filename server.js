@@ -327,6 +327,33 @@ var waves = [
 	],
 	[
 	new Wave(enemy='Centaur', quantity=10, timeBetween=50, timeAfter=10000)
+	],
+	[
+	new Wave(enemy='Centaur', quantity=10, timeBetween=50, timeAfter=10000)
+	],
+	[
+	new Wave(enemy='Centaur', quantity=10, timeBetween=50, timeAfter=10000)
+	],
+	[
+	new Wave(enemy='Centaur', quantity=10, timeBetween=50, timeAfter=10000)
+	],
+	[
+	new Wave(enemy='Centaur', quantity=10, timeBetween=50, timeAfter=10000)
+	],
+	[
+	new Wave(enemy='Centaur', quantity=10, timeBetween=50, timeAfter=10000)
+	],
+	[
+	new Wave(enemy='Centaur', quantity=10, timeBetween=50, timeAfter=10000)
+	],
+	[
+	new Wave(enemy='Centaur', quantity=10, timeBetween=50, timeAfter=10000)
+	],
+	[
+	new Wave(enemy='Centaur', quantity=10, timeBetween=50, timeAfter=10000)
+	],
+	[
+	new Wave(enemy='Centaur', quantity=10, timeBetween=50, timeAfter=10000)
 	]
 ];
 
@@ -372,6 +399,42 @@ io.on('connection', function(socket) {
 	socket.on('expense', function(cost) {
 		var player = games[users[socket.id].inGame].players[socket.id];
 		player.gold -= cost;
+	});
+	socket.on('removeEnemies', function(enemies, playerID) {
+		var player = games[users[socket.id].inGame].players[playerID];
+		for (var e in enemies) {
+			for (var i=0; i<player.enemies.length; i++) {
+				var enemy = player.enemies[i];
+				if (enemy.id == enemies[e].id) {
+					player.enemies.splice(i, 1);
+					break;
+				}
+			}
+		}
+	});
+	socket.on('addEnemies', function(enemies, playerID) {
+		var player = games[users[socket.id].inGame].players[playerID];
+		for (var e in enemies) {
+			var enemy = enemies[e];
+			var newEnemy = new (eval(enemy.name))(id=enemy.id, owner=player.id, gameID=users[socket.id].inGame);
+			newEnemy.progress = enemy.progress;
+			newEnemy.hp = enemy.hp;
+			newEnemy.pathProgress = enemy.pathProgress;
+			newEnemy.path = enemy.path;
+			newEnemy.x = enemy.x;
+			newEnemy.y = enemy.y;
+			newEnemy.lastEffectTime = games[users[socket.id].inGame].time;
+			newEnemy.visible = enemy.visible;
+			newEnemy.maxhp = enemy.maxhp;
+			newEnemy.armor = enemy.armor;
+			newEnemy.speed = enemy.speed;
+			newEnemy.damage = enemy.damage;
+			newEnemy.effect = enemy.effect;
+			newEnemy.outline = enemy.outline;
+			newEnemy.color = enemy.color;
+			newEnemy.size = enemy.size;
+			player.enemies.push(newEnemy);
+		}
 	});
 	socket.on('oppTrack', function(changes) {
 		var game = games[users[socket.id].inGame]
@@ -419,6 +482,8 @@ io.on('connection', function(socket) {
 				firstPath.vertices.push(new Point(first.vertex.x, first.vertex.y));
 				marker = false;
 			}
+
+			marker = false;
 
 			for (var i=firstPath.next.length-1; i>=0; i--) {
 				if (track.paths[firstPath.next[i]].vertices[0].x == vertexHolder1[vertexHolder1.length-1].x && track.paths[firstPath.next[i]].vertices[0].y == vertexHolder1[vertexHolder1.length-1].y) {
@@ -588,18 +653,18 @@ function findMatch(socket) {
     		spawnNumber: 0,
     		enemyID: 0,
     		spawnable: [
-				{enemy: 'Satyr', cost: 10, honor: 0.01, quantity: 8, timeBetween: 250, wave: 0},
-				{enemy: 'Pan', cost: 40, honor: 0.01, quantity: 1, timeBetween: 1000, wave: 1},
-				{enemy: 'Centaur', cost: 40, honor: 0.04, quantity: 6, timeBetween: 300, wave: 2},
-				{enemy: 'Chiron', cost: 80, honor: 0.04, quantity: 1, timeBetween: 1500, wave: 3},
-				{enemy: 'Harpy', cost: 100, honor: 0.1, quantity: 6, timeBetween: 250, wave: 4},
-				{enemy: 'Ocypete', cost: 140, honor: 0.1, quantity: 1, timeBetween: 700, wave: 5},
-				{enemy: 'Pterippus', cost: 150, honor: 0.15, quantity: 5, timeBetween: 250, wave: 6},
-				{enemy: 'Pegasus and Bellerophon', cost: 300, honor: 0.15, quantity: 1, timeBetween: 3000, wave: 7},
-				{enemy: 'Argonaut', cost: 250, honor: 0.25, quantity: 6, timeBetween: 200, wave: 8},
-				{enemy: 'Perseus', cost: 500, honor: 0.25, quantity: 1, timeBetween: 2000, wave: 9},
-				{enemy: 'Cyclops', cost: 500, honor: 0.5, quantity: 5, timeBetween: 500, wave: 10},
-				{enemy: 'Theseus', cost: 1000, honor: 0.5, quantity: 1, timeBetween: 4000, wave: 11}
+				{enemy: 'Satyr', cost: 10, honor: 0.01, quantity: 8, timeBetween: 250, wave: 1},
+				{enemy: 'Pan', cost: 40, honor: 0.01, quantity: 1, timeBetween: 1000, wave: 2},
+				{enemy: 'Centaur', cost: 40, honor: 0.04, quantity: 6, timeBetween: 300, wave: 3},
+				{enemy: 'Chiron', cost: 80, honor: 0.04, quantity: 1, timeBetween: 1500, wave: 4},
+				{enemy: 'Harpy', cost: 100, honor: 0.1, quantity: 6, timeBetween: 250, wave: 5},
+				{enemy: 'Ocypete', cost: 140, honor: 0.1, quantity: 1, timeBetween: 700, wave: 6},
+				{enemy: 'Pterippus', cost: 150, honor: 0.15, quantity: 5, timeBetween: 250, wave: 7},
+				{enemy: 'Pegasus and Bellerophon', cost: 300, honor: 0.15, quantity: 1, timeBetween: 3000, wave: 8},
+				{enemy: 'Argonaut', cost: 250, honor: 0.25, quantity: 6, timeBetween: 200, wave: 9},
+				{enemy: 'Perseus', cost: 500, honor: 0.25, quantity: 1, timeBetween: 2000, wave: 10},
+				{enemy: 'Cyclops', cost: 500, honor: 0.5, quantity: 5, timeBetween: 500, wave: 11},
+				{enemy: 'Theseus', cost: 1000, honor: 0.5, quantity: 1, timeBetween: 4000, wave: 12}
 			],
     		players: {}
     	};
@@ -615,7 +680,7 @@ function findMatch(socket) {
 		    incomeTime: 6000,
 		    queueTime: 0,
 		    queueLeft: 0,
-		    canBuild: ['Archer', 'Chaingunner', 'Deceiver'],
+		    canBuild: ['Archer', 'Tartarus', 'Deceiver'],
 		    towers: [],
 		    projectiles: [],
 		    enemies: [],
@@ -633,7 +698,7 @@ function findMatch(socket) {
 		    incomeTime: 6000,
 		    queueTime: 0,
 		    queueLeft: 0,
-		    canBuild: ['Archer', 'Chaingunner', 'Deceiver'],
+		    canBuild: ['Archer', 'Tartarus', 'Deceiver'],
 		    towers: [],
 		    projectiles: [],
 		    enemies: [],
