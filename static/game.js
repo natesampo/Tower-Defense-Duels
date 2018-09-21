@@ -130,6 +130,12 @@ class Tower {
     this.damageDealt = 0;
   }
 
+  addToAbilityList() {
+  	for (var i in abilities) {
+  		if
+  	}
+  }
+
   sell() {
     socket.emit('sold', this);
     for (var i in towers) {
@@ -281,7 +287,6 @@ class Tower {
   }
 }
 
-//built, upgradeEffects, x, y, cost, size, color, range, attackTime, damage, projectile, target, canTarget, ability, owner
 class Archer extends Tower {
   constructor(x, y) {
     super(false, 'Archer', {left: [{cost: 100, name: 'Keen Eyes', effect: function(tower) {tower.range = 0.4; tower.canHitInvisible = true;}}, {cost: 150, name: 'Sharper Shots', effect: function(tower) {tower.projectile = 'SharperDart';}}], right: [{cost: 100, name: 'Quick Draw', effect: function(tower) {tower.attackTime = 500;}}]}, x, y, 100, 0.03, 'brown', 0.2, 1000, 0, 0, 'BasicDart', defaultTarget, ['first', 'last', 'strong', 'weak', 'close'], false, {name: 'An Ability', cost: 0, effect: null}, socket.id);
@@ -296,20 +301,20 @@ class Sniper extends Tower {
 
 class Chaingunner extends Tower {
   constructor(x, y) {
-    super(false, {left: [{cost:500, name: 'Load Faster', effect: function(tower) {tower.attackTime = 300;}}, {cost: 1200, name: 'LOAD EVEN FASTER', effect: function(tower) {tower.attackTime = 150;}}], right: [{cost: 66666, name: '10 cm bullets', effect: function(tower) {tower.projectile = 'PowerfulBasicDart';}}]}, x, y, 1000, 0.02, 'gray', .15, 500, 0, 0, 'BasicDart', defaultTarget, ['first', 'last', 'strong', 'weak', 'close'], false, {name: 'An Ability', cost: 0, effect: null}, socket.id);
+    super(false, 'Chaingunner', {left: [{cost:500, name: 'Load Faster', effect: function(tower) {tower.attackTime = 300;}}, {cost: 1200, name: 'LOAD EVEN FASTER', effect: function(tower) {tower.attackTime = 150;}}], right: [{cost: 66666, name: '10 cm bullets', effect: function(tower) {tower.projectile = 'PowerfulBasicDart';}}]}, x, y, 1000, 0.02, 'gray', .15, 500, 0, 0, 'BasicDart', defaultTarget, ['first', 'last', 'strong', 'weak', 'close'], false, {name: 'An Ability', cost: 0, effect: null}, socket.id);
   }
 }
 
 class Deceiver extends Tower {
   constructor(x, y) {
-    super(false, {left: [], right: [{cost: 100, name: 'Trick the Track', effect: function(tower) {maxSize = 0.4; vertexPlaced = 0; vertexAvailable = 2; selected = 'oppTrack'; selectedObject = []; tower.trackPiece = selectedObject;}}]}, x, y, 150, 0.02, 'white', 0, 0, 0, 0, null, null, [], true, {name: 'An Ability', cost: 0, effect: null}, socket.id);
+    super(false, 'Deceiver', {left: [], right: [{cost: 100, name: 'Trick the Track', effect: function(tower) {maxSize = 0.4; vertexPlaced = 0; vertexAvailable = 2; selected = 'oppTrack'; selectedObject = []; tower.trackPiece = selectedObject;}}]}, x, y, 150, 0.02, 'white', 0, 0, 0, 0, null, null, [], true, {name: 'An Ability', cost: 0, effect: null}, socket.id);
     this.trackPiece;
   }
 }
 //built, upgradeEffects, x, y, cost, size, color, range, attackTime, damage, pierce, projectile, target, canTarget, canHitInvisible, ability, owner
 class Tartarus extends Tower {
   constructor(x, y) {
-    super(false, {left: [{cost: 50, name: 'Deeper', effect: function(tower) {tower.depth += 20;}}, {cost: 50, name: 'Deeper', effect: function(tower) {tower.depth += 20;}}, {cost: 50, name: 'Deeper', effect: function(tower) {tower.depth += 20;}}], right: [{cost: 50, name: 'Deeper', effect: function(tower) {tower.depth += 20;}}, {cost: 50, name: 'Deeper', effect: function(tower) {tower.depth += 20;}}, {cost: 50, name: 'Deeper', effect: function(tower) {tower.depth += 20;}}, {cost: 4500, name: 'Hungry Hydra', effect: function(tower) {tower.attackTime += 500;}}]}, x, y, 150, 0.04, 'black', 0, 0, 5, 1, null, null, [], true, {name: 'An Ability', cost: 0, effect: null}, socket.id);
+    super(false, 'Tartarus', {left: [{cost: 50, name: 'Deeper', effect: function(tower) {tower.depth += 20;}}, {cost: 50, name: 'Deeper', effect: function(tower) {tower.depth += 20;}}, {cost: 50, name: 'Deeper', effect: function(tower) {tower.depth += 20;}}], right: [{cost: 50, name: 'Deeper', effect: function(tower) {tower.depth += 20;}}, {cost: 50, name: 'Deeper', effect: function(tower) {tower.depth += 20;}}, {cost: 50, name: 'Deeper', effect: function(tower) {tower.depth += 20;}}, {cost: 4500, name: 'Hungry Hydra', effect: function(tower) {tower.attackTime += 500;}}]}, x, y, 150, 0.04, 'black', 0, 0, 5, 1, null, null, [], true, {name: 'An Ability', cost: 0, effect: null}, socket.id);
     this.depth = 20;
     this.filled = 0;
     this.contents = [];
