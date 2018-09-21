@@ -102,8 +102,9 @@ class PowerfulBasicDart extends Projectile {
 }
 
 class Tower {
-  constructor(built, upgradeEffects, x, y, cost, size, color, range, attackTime, damage, pierce, projectile, target, canTarget, canHitInvisible, ability, owner) {
+  constructor(built, name, upgradeEffects, x, y, cost, size, color, range, attackTime, damage, pierce, projectile, target, canTarget, canHitInvisible, ability, owner) {
     this.id = towersBuilt;
+    this.name = name;
     this.upgradeEffects = upgradeEffects;
     this.built = built;
     this.x = x;
@@ -283,13 +284,13 @@ class Tower {
 //built, upgradeEffects, x, y, cost, size, color, range, attackTime, damage, projectile, target, canTarget, ability, owner
 class Archer extends Tower {
   constructor(x, y) {
-    super(false, {left: [{cost: 100, name: 'Keen Eyes', effect: function(tower) {tower.range = 0.4; tower.canHitInvisible = true;}}, {cost: 150, name: 'Sharper Shots', effect: function(tower) {tower.projectile = 'SharperDart';}}], right: [{cost: 100, name: 'Quick Draw', effect: function(tower) {tower.attackTime = 500;}}]}, x, y, 100, 0.03, 'brown', 0.2, 1000, 0, 0, 'BasicDart', defaultTarget, ['first', 'last', 'strong', 'weak', 'close'], false, {name: 'An Ability', cost: 0, effect: null}, socket.id);
+    super(false, 'Archer', {left: [{cost: 100, name: 'Keen Eyes', effect: function(tower) {tower.range = 0.4; tower.canHitInvisible = true;}}, {cost: 150, name: 'Sharper Shots', effect: function(tower) {tower.projectile = 'SharperDart';}}], right: [{cost: 100, name: 'Quick Draw', effect: function(tower) {tower.attackTime = 500;}}]}, x, y, 100, 0.03, 'brown', 0.2, 1000, 0, 0, 'BasicDart', defaultTarget, ['first', 'last', 'strong', 'weak', 'close'], false, {name: 'An Ability', cost: 0, effect: null}, socket.id);
   }
 }
 
 class Sniper extends Tower {
   constructor(x, y) {
-    super(false, {left: [{cost: 100, name: '.30 Caliber', effect: function(tower) {tower.damage = 4;}}, {cost: 200, name: '.50 Caliber', effect: function(tower) {tower.damage = 5; tower.pierce = 0.3;}}], right: [{cost: 200, name: 'Rapid Reload', effect: function(tower) {tower.attackTime = 1500;}}]}, x, y, 150, 0.02, 'blue', 1, 2000, 2, 0, null, defaultTarget, ['first', 'last', 'strong', 'weak', 'close'], true, {name: 'An Ability', cost: 0, effect: null}, socket.id);
+    super(false, 'Sniper', {left: [{cost: 100, name: '.30 Caliber', effect: function(tower) {tower.damage = 4;}}, {cost: 200, name: '.50 Caliber', effect: function(tower) {tower.damage = 5; tower.pierce = 0.3;}}], right: [{cost: 200, name: 'Rapid Reload', effect: function(tower) {tower.attackTime = 1500;}}]}, x, y, 150, 0.02, 'blue', 1, 2000, 2, 0, null, defaultTarget, ['first', 'last', 'strong', 'weak', 'close'], true, {name: 'An Ability', cost: 0, effect: null}, socket.id);
   }
 }
 
@@ -489,6 +490,7 @@ var towersBuilt = 0;
 var defaultTarget = 0;
 var armorHalfReduction = 10;
 var firstTime = true;
+var abilities = [];
 var buttons = [
   new Button(side=0, x=3, y=0, name=function () {return (selectedObject.upgradeEffects.left[selectedObject.leftUpgrades] ? selectedObject.upgradeEffects.left[selectedObject.leftUpgrades].name : 'No More Upgrades');}, cost=function () {return (selectedObject.upgradeEffects.left[selectedObject.leftUpgrades] ? selectedObject.upgradeEffects.left[selectedObject.leftUpgrades].cost : 0);}, width=2, height=2, visible=function() {return 'tower'}, onClick=function() {if (selectedObject.upgradeEffects.left[selectedObject.leftUpgrades]) {if (player.gold >= selectedObject.upgradeEffects.left[selectedObject.leftUpgrades].cost) {socket.emit('expense', selectedObject.upgradeEffects.left[selectedObject.leftUpgrades].cost); selectedObject.upgrade('left');}}}),
   new Button(side=0, x=5, y=0, name=function () {return (selectedObject.upgradeEffects.right[selectedObject.rightUpgrades] ? selectedObject.upgradeEffects.right[selectedObject.rightUpgrades].name : 'No More Upgrades');}, cost=function () {return (selectedObject.upgradeEffects.right[selectedObject.rightUpgrades] ? selectedObject.upgradeEffects.right[selectedObject.rightUpgrades].cost : 0);}, width=2, height=2, visible=function() {return 'tower'}, onClick=function() {if (selectedObject.upgradeEffects.right[selectedObject.rightUpgrades]) {if (player.gold >= selectedObject.upgradeEffects.right[selectedObject.rightUpgrades].cost) {socket.emit('expense', selectedObject.upgradeEffects.right[selectedObject.rightUpgrades].cost); selectedObject.upgrade('right');}}}),
@@ -508,6 +510,7 @@ socket.on('state', function(game) {
     for (let i=0; i<player.canBuild.length; i++) {
       buttons.push(new Button(side=0, x=i, y=0, name=function () {return player.canBuild[i];}, cost=function () {var tower = new (eval(player.canBuild[i]))(0, 0); return tower.cost;}, width=1, height=1, visible=function() {return null}, onClick=function() {var tower = new (eval(player.canBuild[i]))(mouseX, mouseY); if (player.gold >= tower.cost) {holding = tower;}}));
       buttons.push(new Button(side=0, x=i+0.09, y=1, name=function () {return (new (eval(player.canBuild[i]))(0, 0).ability.name);}, cost=function () {var tower = new (eval(player.canBuild[i]))(0, 0); return tower.ability.cost;}, width=0.75, height=0.75, visible=function() {return null}, onClick=function() {var tower = new (eval(player.canBuild[i]))(0, 0); if (player.gold >= tower.ability.cost) {tower.ability.effect();}}));
+      abilities.push([]);
     }
 
     for (let i=0; i<gameObject.spawnable.length; i++) {
