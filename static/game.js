@@ -131,9 +131,23 @@ class Tower {
   }
 
   addToAbilityList() {
-  	for (var i in abilities) {
-  		if
+  	for (var i in player.canBuild) {
+      if (this.name == player.canBuild[i]) {
+        abilities[i].push(this);
+        break;
+      }
   	}
+  }
+
+  removeFromAbilityList() {
+    for (var i in abilities) {
+      for (var j in abilities[i]) {
+        if (abilities[i][j] == this) {
+          abilities[i].splice(j, 1);
+          break;
+        }
+      }
+    }
   }
 
   sell() {
@@ -145,6 +159,8 @@ class Tower {
         break;
       }
     }
+
+    this.removeFromAbilityList();
 
     if (selectedObject && selectedObject == this) {
       selected = null;
@@ -307,7 +323,7 @@ class Chaingunner extends Tower {
 
 class Deceiver extends Tower {
   constructor(x, y) {
-    super(false, 'Deceiver', {left: [], right: [{cost: 100, name: 'Trick the Track', effect: function(tower) {maxSize = 0.4; vertexPlaced = 0; vertexAvailable = 2; selected = 'oppTrack'; selectedObject = []; tower.trackPiece = selectedObject;}}]}, x, y, 150, 0.02, 'white', 0, 0, 0, 0, null, null, [], true, {name: 'An Ability', cost: 0, effect: null}, socket.id);
+    super(false, 'Deceiver', {left: [], right: [{cost: 100, name: 'Trick the Track', effect: function(tower) {maxSize = 0.4; vertexPlaced = 0; vertexAvailable = 2; selected = 'oppTrack'; selectedObject = []; tower.trackPiece = selectedObject;}}]}, x, y, 150, 0.02, 'white', 0, 0, 0, 0, null, null, [], true, {name: 'Flashbang', cost: 0, effect: function(tower) {player.opponent;}}, socket.id);
     this.trackPiece;
   }
 }
